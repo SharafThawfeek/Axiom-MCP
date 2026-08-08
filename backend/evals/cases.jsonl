@@ -1,3 +1,9 @@
-{"query": "AttributeError: DataFrame object has no attribute 'append'", "library": "pandas", "expected_issue_url": "https://github.com/pandas-dev/pandas/issues/35407"}
-{"query": "requests.exceptions.ConnectionError: Max retries exceeded", "library": "requests", "expected_issue_url": "https://github.com/psf/requests/issues/8375"}
-{"query": "ImportError: cannot import name 'url_quote' from 'werkzeug.urls'", "library": "flask", "expected_issue_url": "https://github.com/pallets/flask/issues/5391"}
+{"query": "DataFrame rename silently changes nullable Int64 index dtype to int64", "library": "pandas", "expected_issue_url": "https://github.com/pandas-dev/pandas/issues/65315"}
+{"query": "read_csv C engine merges distinct rows when strings contain embedded NUL characters", "library": "pandas", "expected_issue_url": "https://github.com/pandas-dev/pandas/issues/66525"}
+{"query": "cummax on pyarrow float Series returns tiny sentinel value instead of running maximum", "library": "pandas", "expected_issue_url": "https://github.com/pandas-dev/pandas/issues/66257"}
+{"query": "PeriodIndex on DatetimeIndex without explicit freq raises but works when wrapped in a Series", "library": "pandas", "expected_issue_url": "https://github.com/pandas-dev/pandas/issues/64241"}
+{"query": "plotting a DataFrame with TimedeltaIndex shows no x-axis labels", "library": "pandas", "expected_issue_url": "https://github.com/pandas-dev/pandas/issues/18910"}
+{"query": "SQL identifiers not escaped in ADBC delete_rows allows unintended deletion", "library": "pandas", "expected_issue_url": "https://github.com/pandas-dev/pandas/issues/65065"}
+{"query": "truncated DataFrame repr shows NaN instead of pd.NA in object dtype column", "library": "pandas", "expected_issue_url": "https://github.com/pandas-dev/pandas/issues/33065"}
+{"query": "df.plot renders differently for freq h versus freq 60min despite equivalent frequency", "library": "pandas", "expected_issue_url": "https://github.com/pandas-dev/pandas/issues/57587"}
+{"query": "Series fillna inconsistent casting behavior with incompatible extension dtype values", "library": "pandas", "expected_issue_url": "https://github.com/pandas-dev/pandas/issues/45153"}

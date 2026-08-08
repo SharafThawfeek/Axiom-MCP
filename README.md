@@ -273,16 +273,39 @@ Everything below was run for real, not just written and assumed correct:
 - **Citation integrity** — tests prove a fabricated citation id cannot
   survive `filter_valid_citations`; live testing proved the semantic
   verifier catches real over-claiming, not just fabrication.
+- **The whole point of the product, end-to-end against a real index** —
+  for a long stretch this was the honest gap: every live `/analyze` test
+  returned `matched_issues: []` because the index was empty, so grounded
+  citation had never actually been demonstrated, only unit-tested in
+  pieces. Now proven with real crawled pandas incidents: a realistic test
+  failure (`AssertionError` on a dtype after `rename`) produced
+  `search_incidents` → `get_issue_details` (a deliberate confirmation
+  lookup) → `check_latest_version` → `finalize_analysis`, citing the real
+  [pandas#65315](https://github.com/pandas-dev/pandas/issues/65315) and
+  the real PR that fixed it, at honestly-calibrated `medium` confidence.
+  The negative case matters as much: an unrelated SMTP `TimeoutError`
+  returned **zero** citations and never called `search_incidents` at all —
+  the agent correctly judged it environmental rather than forcing a match.
+  Retrieval was separately confirmed to return the correct incident at
+  rank 1 (similarity 0.85–0.89) for real queries, and nothing whatsoever
+  for nonsense input.
 - **Data sanitization at every DB boundary** — a real crawl hit
   `CharacterNotInRepertoireError` (Postgres rejects NUL bytes in text
   columns outright) on real GitHub issue text, losing an entire committed
   batch. Fixed in the indexer's `load()`, and the same class of risk was
   found and fixed in the live `/analyze` path too (`log_excerpt` is raw
   user-pasted text) before it could ever happen there.
-- **Eval harness** — seeded incidents, ran it for real, got perfect
-  recall@1/3/5 and MRR. Cases in `evals/cases.jsonl` are still synthetic —
-  swapping in real crawled cases is blocked on the indexer finishing a real
-  run, not on anything in the eval harness itself.
+- **Eval harness, against real crawled data** — `evals/cases.jsonl` now
+  holds real cases derived from genuinely indexed pandas issues (the
+  synthetic placeholders are gone). MRR 1.0, recall@1/3/5 all 1.0 across
+  9 cases. **That number is not as impressive as it looks, and shouldn't be
+  read as "retrieval is solved":** with only ~10 incidents indexed, there
+  are almost no near-duplicates to confuse a query, and the queries are
+  paraphrases of the indexed summaries. It proves the harness and the
+  retrieval path genuinely work against real data end-to-end — not that
+  quality holds at 10,000 incidents where similar issues actually compete.
+  Re-run this once the index is substantially larger; a drop from 1.0 there
+  would be the real signal.
 - **Patch generation and application, live** — a real `/analyze` call with
   real `file_context` produced a real patch on the first correctly-formatted
   attempt; the OpenAI-style-convention problem described above was found
