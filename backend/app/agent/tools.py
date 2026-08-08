@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.incident import OSSIncident
+from app.schemas.analysis import VersionVerdict
 from app.schemas.incident import Citation, MatchedIssue
 from app.services.retrieval_service import RetrievalService
 from app.services.version_service import VersionService
@@ -195,6 +196,13 @@ class ToolExecutor:
         # despite having clearly used a retrieved incident.
         self.confirmed_incident_ids: list[str] = []
 
+        # Every check_latest_version result, in call order. The agent gets
+        # these back as tool output and reasons over them, but they also
+        # need to reach the API response as structured data — otherwise a
+        # frontend has nothing to render but prose. A list because the agent
+        # can legitimately check more than one package.
+        self.version_verdicts: list[VersionVerdict] = []
+
     async def execute(self, name: str, arguments: dict) -> str:
         handler = {
             "search_incidents": self._search_incidents,
@@ -289,6 +297,7 @@ class ToolExecutor:
             installed = VersionService.installed_version(self.dependencies_text, package)
 
         verdict = await VersionService.verdict(package, installed)
+        self.version_verdicts.append(verdict)
         return json.dumps(verdict.model_dump())
 
     async def _finalize_analysis(

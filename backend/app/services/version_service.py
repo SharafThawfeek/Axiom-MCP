@@ -32,23 +32,6 @@ class VersionService:
         return None
 
     @staticmethod
-    async def lookup_release_date(package: str, version: str) -> str | None:
-        """When a specific version of a package was uploaded to PyPI, if at all."""
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            try:
-                response = await client.get(PYPI_URL.format(package=package))
-                response.raise_for_status()
-            except httpx.HTTPError as exc:
-                logger.warning("PyPI lookup failed for %s: %s", package, exc)
-                return None
-
-        data = response.json()
-        releases = data.get("releases", {}).get(version, [])
-        if not releases:
-            return None
-        return releases[0].get("upload_time_iso_8601")
-
-    @staticmethod
     async def latest_version(package: str) -> str | None:
         async with httpx.AsyncClient(timeout=10.0) as client:
             try:

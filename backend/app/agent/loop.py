@@ -194,6 +194,23 @@ def _build_initial_message(
     return "\n\n".join(parts)
 
 
+def _pick_version_verdict(verdicts: list, suspected_library: str | None):
+    """The response carries one verdict, but the agent may check several
+    packages. Prefer the one for the library it actually blamed — that's
+    the one a reader cares about — and fall back to the first checked
+    rather than dropping the information entirely."""
+    if not verdicts:
+        return None
+
+    if suspected_library:
+        target = suspected_library.strip().lower()
+        for verdict in verdicts:
+            if verdict.package.strip().lower() == target:
+                return verdict
+
+    return verdicts[0]
+
+
 async def run_agent(
     db: AsyncSession,
     log: str,
@@ -371,5 +388,8 @@ async def run_agent(
         failure=failure,
         analysis=analysis,
         matched_issues=cited_issues,
+        version_verdict=_pick_version_verdict(
+            executor.version_verdicts, analysis.suspected_library
+        ),
         agent_trace={"tool_calls": trace},
     )

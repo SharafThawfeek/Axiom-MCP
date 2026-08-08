@@ -55,10 +55,16 @@ class ParsedFailure(BaseModel):
 
 
 class VersionVerdict(BaseModel):
+    """What check_latest_version found for one package.
+
+    Deliberately not persisted with the analysis: "latest on PyPI" is
+    time-sensitive, so serving a stored copy on a cache hit would hand back
+    a verdict that may since have gone stale. Same reasoning as
+    suggested_patch — fresh runs report it, stored records don't.
+    """
+
     package: str
     installed_version: str | None
-    introduced_in: str | None = None
-    fixed_in: str | None = None
     verdict: str
 
 
