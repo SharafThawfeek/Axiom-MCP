@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: pytest
+
+  # Manual-mode: on a CI failure, ask Axiom Debug what went wrong and post
+  # the diagnosis as a PR comment. Nothing gets fixed or pushed automatically
+  # — this only tells the developer what broke and why, where they're
+  # already looking. Requires AXIOM_API_URL (a repo variable) pointing at a
+  # reachable Axiom Debug deployment; skips cleanly if it isn't set, since
+  # GitHub's runners can't reach a developer's localhost.
+  report-failure:
+    needs: test
+    if: failure() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch the failed job's log
+        run: gh run view ${{ github.run_id }} --log-failed > failure.log
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Ask Axiom Debug what went wrong
+        run: python .github/scripts/report_ci_failure.py failure.log comment.md
+        env:
+          AXIOM_API_URL: ${{ vars.AXIOM_API_URL }}
+
+      - name: Post the diagnosis as a PR comment
+        if: hashFiles('comment.md') != ''
+        run: gh pr comment ${{ github.event.pull_request.number }} --body-file comment.md
+        env:
+          GH_TOKEN: ${{ github.token }}
