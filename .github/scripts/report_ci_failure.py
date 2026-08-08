@@ -20,7 +20,6 @@ import json
 import os
 import re
 import sys
-import urllib.error
 import urllib.request
 
 TIMEOUT_SECONDS = 90
@@ -119,15 +118,20 @@ def main() -> int:
 
     try:
         result = analyze(api_url, log_text, file_context)
-    except (urllib.error.URLError, TimeoutError) as exc:
-        print(f"Axiom Debug was unreachable ({exc}); skipping comment.", file=sys.stderr)
+        analysis = result["analysis"]
+    except Exception as exc:
+        # Broad on purpose: network errors, a malformed (non-JSON) response
+        # body, or an unexpected response shape missing "analysis" should
+        # all degrade the same way — this reporting step is a value-add on
+        # top of CI, never a reason for CI itself to show red.
+        print(f"Axiom Debug call failed ({exc}); skipping comment.", file=sys.stderr)
         return 0
 
     # An unset repo variable arrives as an empty string, not a missing key —
     # `or` catches that case too, not just true absence (see apply_fix.py's
     # TEST_COMMAND for why this distinction matters).
     mode = (os.environ.get("AXIOM_MODE") or "manual").strip().lower()
-    comment = format_comment(result["analysis"], show_patch=(mode == "review"))
+    comment = format_comment(analysis, show_patch=(mode == "review"))
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(comment)
 

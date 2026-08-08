@@ -29,6 +29,14 @@ search gets reformulated and retried before the agent gives up. A timeout
 gets correctly identified as environmental instead of forced into a false
 match.
 
+`finalize_analysis` can optionally include `suggested_patch` — a real,
+minimal fix — but only when the caller supplies `file_context` (the actual
+current content of the implicated file). Never fabricated against a file
+the agent hasn't seen: dropped defensively even if the model returns one
+anyway when no `file_context` was given, regardless of what the prompt
+asked for. That code-side guard is the actual safety boundary, not the
+prompt.
+
 **Citations can't be fabricated.** The agent can only cite an incident it
 actually retrieved via a tool call this session — there is no code path
 that lets it cite an id it never looked up, and a code-side fallback covers
@@ -72,6 +80,40 @@ whatever the agent explicitly looked up via `get_issue_details` if the
 model's own citation list comes back empty. Both are in `app/agent/tools.py`
 and `app/agent/loop.py`, and both were verified against real API responses,
 not assumed.
+
+## CI integration: three modes, one setting
+
+`.github/workflows/ci.yml` runs the test suite on every push/PR, and on a
+real failure, reacts automatically instead of waiting for someone to
+manually paste the log in. One repo variable, `AXIOM_MODE`, picks how far
+it goes:
+
+- **manual** (default) — post the diagnosis as a PR comment. Nothing else
+  touches git.
+- **review** — same, plus any `suggested_patch` shown as a reviewable diff
+  right in the comment.
+- **automatic** — apply the patch on a fresh branch, run the test suite,
+  and only if that's clean, push the branch and open a PR. Never commits to
+  the branch that triggered it — "automatic" means zero manual effort up to
+  a merge click, not an unsupervised write to a protected branch. Any
+  failure along the way (patch doesn't apply, tests fail) falls back to the
+  same review-mode comment instead of silently doing nothing.
+
+Requires `AXIOM_API_URL` (a repo variable) pointing at a reachable Axiom
+Debug deployment — GitHub's runners can't reach a developer's `localhost`,
+so this step skips cleanly, without failing the build, if it isn't set.
+
+**A real discovery while building this, worth documenting alongside the
+citation-omission story above — same lesson, different symptom.** Despite
+an explicit unified-diff format example in the system prompt, gpt-oss-120b
+defaulted to a different, OpenAI-specific `*** Begin Patch` patch
+convention twice in a row in live testing. Prompting alone didn't fix it,
+same as citations. The fix was structural again: `apply_fix.py` recognises
+that shape and converts it via verified, unambiguous text substitution
+(exact match required across every hunk, checked before anything is
+written — any ambiguity fails closed rather than guessing) instead of
+fighting the model's prior. Tested against both real captured patches from
+the live runs that found the problem, not synthetic recreations.
 
 ## Architecture
 
@@ -119,6 +161,11 @@ backend/
 └── tests/
 infrastructure/
 └── docker-compose.yml  Postgres 16 + pgvector
+.github/
+├── workflows/ci.yml     test suite + the three-mode failure reaction
+└── scripts/             report_ci_failure.py (manual/review), apply_fix.py
+                          (automatic) — stdlib-only, no install step needed
+                          for their own standalone CI job
 ```
 
 Every layer mirrors the conventions of the shared `axiom-ai` backend (thin
@@ -236,8 +283,16 @@ Everything below was run for real, not just written and assumed correct:
   recall@1/3/5 and MRR. Cases in `evals/cases.jsonl` are still synthetic —
   swapping in real crawled cases is blocked on the indexer finishing a real
   run, not on anything in the eval harness itself.
+- **Patch generation and application, live** — a real `/analyze` call with
+  real `file_context` produced a real patch on the first correctly-formatted
+  attempt; the OpenAI-style-convention problem described above was found
+  this way, not hypothesised, and the fix was verified against those exact
+  captured patches applying cleanly to a real git repo, including the
+  ambiguous-match and missing-file failure modes failing closed correctly.
 
-**57/57 tests pass.**
+**90 tests pass** (60 backend, 30 covering the CI scripts — including real
+`git apply`/branch/commit operations against a real temporary repo, not
+just mocked subprocess calls).
 
 The offline indexer is fully wired and running (`GITHUB_TOKEN` and
 `GROQ_API_KEY` configured; `GEMINI_API_KEY` optional). The index is still

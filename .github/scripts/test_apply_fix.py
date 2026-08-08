@@ -207,6 +207,24 @@ def test_run_tests_reports_failure(monkeypatch):
     assert ok is False
 
 
+def test_main_skips_cleanly_on_malformed_response(real_repo, monkeypatch, tmp_path):
+    # Missing "analysis" key — automatic mode's whole point is never
+    # touching git without a confirmed-good response to act on.
+    monkeypatch.setenv("AXIOM_API_URL", "http://fake")
+    monkeypatch.setattr(apply_fix, "analyze", lambda *a, **kw: {"unexpected": "shape"})
+
+    log_file = tmp_path / "failure.log"
+    log_file.write_text("Traceback...")
+    output_file = tmp_path / "comment.md"
+
+    monkeypatch.setattr(sys, "argv", ["apply_fix.py", str(log_file), str(output_file)])
+    assert apply_fix.main() == 0
+    assert not output_file.exists()
+
+    status = _git(real_repo, "status", "--porcelain").stdout
+    assert status.strip() == ""
+
+
 def test_main_falls_back_when_no_patch_proposed(real_repo, monkeypatch, tmp_path):
     monkeypatch.setenv("AXIOM_API_URL", "http://fake")
     monkeypatch.setattr(apply_fix, "analyze", lambda *a, **kw: {"analysis": ANALYSIS_WITH_PATCH})
@@ -220,6 +238,61 @@ def test_main_falls_back_when_no_patch_proposed(real_repo, monkeypatch, tmp_path
 
     comment = output_file.read_text(encoding="utf-8")
     assert "no suggested_patch" in comment
+    assert "didn't complete" in comment
+
+
+def test_main_restores_original_branch_when_tests_fail_after_apply(real_repo, monkeypatch, tmp_path):
+    starting_sha = _git(real_repo, "rev-parse", "HEAD").stdout.strip()
+    target = real_repo / "utils.py"
+    patch = _real_diff_for(real_repo, target, "def process(frame):\n    return pd.concat([frame, row])\n")
+    good_analysis = {**ANALYSIS_WITH_PATCH, "suggested_patch": patch}
+
+    monkeypatch.setenv("AXIOM_API_URL", "http://fake")
+    monkeypatch.setattr(apply_fix, "analyze", lambda *a, **kw: {"analysis": good_analysis})
+    monkeypatch.setattr(apply_fix, "TEST_COMMAND", f'"{sys.executable}" -c "exit(1)"')  # tests fail
+
+    log_file = tmp_path / "failure.log"
+    log_file.write_text("Traceback...")
+    output_file = tmp_path / "comment.md"
+
+    monkeypatch.setattr(sys, "argv", ["apply_fix.py", str(log_file), str(output_file)])
+    assert apply_fix.main() == 0
+
+    assert _git(real_repo, "rev-parse", "HEAD").stdout.strip() == starting_sha
+    assert _git(real_repo, "status", "--porcelain").stdout.strip() == ""
+    assert "frame.append" in target.read_text()  # patch was reverted, not left applied
+
+
+def test_main_restores_original_branch_when_push_fails(real_repo, monkeypatch, tmp_path):
+    # No remote configured on this repo, so push_fix_branch's `git push
+    # origin` fails — proves cleanup happens even after a branch was
+    # created and committed to, not just on a same-branch failure.
+    #
+    # _reset_to checks out the starting *commit*, not a branch name — real
+    # GitHub Actions checkouts for pull_request events are detached HEAD to
+    # begin with (refs/pull/<PR>/merge, not a local branch), so restoring
+    # the exact commit is the correct goal, not restoring a branch name
+    # that may never have existed in the first place.
+    starting_sha = _git(real_repo, "rev-parse", "HEAD").stdout.strip()
+    target = real_repo / "utils.py"
+    patch = _real_diff_for(real_repo, target, "def process(frame):\n    return pd.concat([frame, row])\n")
+    good_analysis = {**ANALYSIS_WITH_PATCH, "suggested_patch": patch}
+
+    monkeypatch.setenv("AXIOM_API_URL", "http://fake")
+    monkeypatch.setattr(apply_fix, "analyze", lambda *a, **kw: {"analysis": good_analysis})
+    monkeypatch.setattr(apply_fix, "TEST_COMMAND", f'"{sys.executable}" -c "exit(0)"')  # tests pass
+
+    log_file = tmp_path / "failure.log"
+    log_file.write_text("Traceback...")
+    output_file = tmp_path / "comment.md"
+
+    monkeypatch.setattr(sys, "argv", ["apply_fix.py", str(log_file), str(output_file)])
+    assert apply_fix.main() == 0
+
+    assert _git(real_repo, "rev-parse", "HEAD").stdout.strip() == starting_sha
+    assert _git(real_repo, "status", "--porcelain").stdout.strip() == ""
+
+    comment = output_file.read_text(encoding="utf-8")
     assert "didn't complete" in comment
 
 

@@ -41,6 +41,18 @@ def _git(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["git", *args], capture_output=True, text=True)
 
 
+def _reset_to(starting_ref: str) -> None:
+    """Restores the working tree to exactly where it started, regardless of
+    how far the attempt got. A plain `checkout -- .` only discards unstaged
+    changes — if push_fix_branch got as far as creating a new branch and
+    committing to it before failing (push rejected, gh pr create failed),
+    that leaves the runner sitting on the new branch with a local, unpushed
+    commit, not back on the ref that triggered this run."""
+    _git("checkout", starting_ref)
+    _git("reset", "--hard", starting_ref)
+    _git("clean", "-fd")
+
+
 def _parse_openai_style_patch(raw: str) -> list[tuple[str, str, str]] | None:
     """gpt-oss defaults to an OpenAI-style "*** Begin Patch" convention
     despite being explicitly asked for a unified diff, even with a literal
@@ -70,7 +82,7 @@ def _parse_openai_style_patch(raw: str) -> list[tuple[str, str, str]] | None:
             flush()
             current_path = stripped.split(":", 1)[1].strip()
             old_lines, new_lines = [], []
-        elif stripped.startswith("*** ") or stripped.startswith("@@"):
+        elif stripped.startswith(("*** ", "@@")):
             continue  # Begin/End Patch markers, hunk separators
         elif line.startswith("-") and not line.startswith("---"):
             old_lines.append(line[1:])
@@ -198,14 +210,19 @@ def main() -> int:
 
     try:
         result = analyze(api_url, log_text, file_context)
+        analysis = result["analysis"]
     except Exception as exc:
-        print(f"Axiom Debug was unreachable ({exc}); skipping.", file=sys.stderr)
+        # Broad on purpose: network errors, a malformed response body, or an
+        # unexpected shape missing "analysis" all degrade the same way —
+        # automatic mode's whole point is not to touch git on anything but
+        # a confirmed-good patch, and that starts with a confirmed-good
+        # response in the first place.
+        print(f"Axiom Debug call failed ({exc}); skipping.", file=sys.stderr)
         return 0
-
-    analysis = result["analysis"]
     patch = analysis.get("suggested_patch")
     run_id = os.environ.get("GITHUB_RUN_ID", "local")
     base_branch = os.environ.get("GITHUB_BASE_REF") or "main"
+    starting_ref = _git("rev-parse", "HEAD").stdout.strip()
 
     fallback_reason = None
     if not patch:
@@ -217,7 +234,7 @@ def main() -> int:
         else:
             tests_ok, test_output = run_tests()
             if not tests_ok:
-                _git("checkout", "--", ".")  # discard the applied patch
+                _reset_to(starting_ref)
                 fallback_reason = f"applied patch failed the test suite:\n{test_output}"
             else:
                 branch = f"axiom-fix/{run_id}"
@@ -226,7 +243,7 @@ def main() -> int:
                     f"Axiom Debug: {analysis['summary']}\n\n{analysis['root_cause']}",
                 )
                 if not pushed:
-                    _git("checkout", "--", ".")
+                    _reset_to(starting_ref)
                     fallback_reason = reason
                 else:
                     ok, info = open_pr(

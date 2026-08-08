@@ -4,6 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+import report_ci_failure
 from report_ci_failure import find_implicated_file, format_comment, resolve_file_context
 
 ANALYSIS = {
@@ -108,4 +109,37 @@ def test_unreachable_api_skips_without_crashing(tmp_path):
     )
 
     assert result.returncode == 0
+    assert not output_file.exists()
+
+
+def test_malformed_response_skips_without_crashing(monkeypatch, tmp_path):
+    # Missing "analysis" key — a response shape mismatch, not a network
+    # failure. This reporting step is a value-add on top of CI; it should
+    # never be the reason a workflow step shows red with a raw traceback.
+    monkeypatch.setenv("AXIOM_API_URL", "http://fake")
+    monkeypatch.setattr(report_ci_failure, "analyze", lambda *a, **kw: {"unexpected": "shape"})
+
+    log_file = tmp_path / "failure.log"
+    log_file.write_text("Traceback...")
+    output_file = tmp_path / "comment.md"
+
+    monkeypatch.setattr(sys, "argv", ["report_ci_failure.py", str(log_file), str(output_file)])
+    assert report_ci_failure.main() == 0
+    assert not output_file.exists()
+
+
+def test_non_json_response_skips_without_crashing(monkeypatch, tmp_path):
+    def _raise_decode_error(*a, **kw):
+        import json
+        raise json.JSONDecodeError("bad json", "not json", 0)
+
+    monkeypatch.setenv("AXIOM_API_URL", "http://fake")
+    monkeypatch.setattr(report_ci_failure, "analyze", _raise_decode_error)
+
+    log_file = tmp_path / "failure.log"
+    log_file.write_text("Traceback...")
+    output_file = tmp_path / "comment.md"
+
+    monkeypatch.setattr(sys, "argv", ["report_ci_failure.py", str(log_file), str(output_file)])
+    assert report_ci_failure.main() == 0
     assert not output_file.exists()
