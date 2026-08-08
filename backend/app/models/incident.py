@@ -27,6 +27,11 @@ class OSSIncident(Base):
 
     library: Mapped[str] = mapped_column(String(100), index=True)
 
+    # Which ecosystem this came from. Retrieval filters on it: a Python
+    # TypeError and a JavaScript TypeError are different failures that read
+    # similarly enough to cross the similarity threshold for each other.
+    language: Mapped[str] = mapped_column(String(30), index=True, server_default="python")
+
     issue_number: Mapped[int] = mapped_column(Integer)
     issue_url: Mapped[str] = mapped_column(String(500), unique=True)
     issue_title: Mapped[str] = mapped_column(String(500))

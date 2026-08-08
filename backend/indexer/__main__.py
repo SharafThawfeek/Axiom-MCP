@@ -36,12 +36,12 @@ MAX_ISSUES_PER_LIBRARY = 300
 LOAD_CHUNK_SIZE = 10
 
 
-async def _load_chunk(pypi_name: str, chunk: list) -> int:
+async def _load_chunk(pypi_name: str, chunk: list, language: str) -> int:
     if not chunk:
         return 0
     try:
         async with SessionLocal() as db:
-            return await load(db, pypi_name, chunk)
+            return await load(db, pypi_name, chunk, language)
     except Exception as exc:
         # load() commits per batch of BATCH_SIZE within a chunk, so any batch
         # that already committed is safe either way — this only stops one bad
@@ -53,8 +53,8 @@ async def _load_chunk(pypi_name: str, chunk: list) -> int:
         return 0
 
 
-async def index_library(pypi_name: str, repo: str) -> int:
-    logger.info("=== %s (%s) ===", pypi_name, repo)
+async def index_library(pypi_name: str, repo: str, language: str = "python") -> int:
+    logger.info("=== %s (%s, %s) ===", pypi_name, repo, language)
 
     try:
         owner, name = repo.split("/")
@@ -85,10 +85,10 @@ async def index_library(pypi_name: str, repo: str) -> int:
         buffer.append(result)
 
         if len(buffer) >= LOAD_CHUNK_SIZE:
-            total_inserted += await _load_chunk(pypi_name, buffer)
+            total_inserted += await _load_chunk(pypi_name, buffer, language)
             buffer = []
 
-    total_inserted += await _load_chunk(pypi_name, buffer)
+    total_inserted += await _load_chunk(pypi_name, buffer, language)
 
     logger.info(
         "%s: %d/%d issues were genuine bugs with a real fix, %d newly indexed",
@@ -98,24 +98,33 @@ async def index_library(pypi_name: str, repo: str) -> int:
     return total_inserted
 
 
-async def main(only_library: str | None) -> None:
+async def main(only_library: str | None, only_language: str | None = None) -> None:
     targets = TARGET_LIBRARIES
+    if only_language:
+        targets = [t for t in targets if t[2] == only_language]
+        if not targets:
+            logger.error("No libraries for language: %s", only_language)
+            return
     if only_library:
-        targets = [t for t in TARGET_LIBRARIES if t[0] == only_library]
+        targets = [t for t in targets if t[0] == only_library]
         if not targets:
             logger.error("Unknown library: %s", only_library)
             return
 
     total = 0
-    for pypi_name, repo in targets:
-        total += await index_library(pypi_name, repo)
+    for pypi_name, repo, language in targets:
+        total += await index_library(pypi_name, repo, language)
 
     logger.info("Done. %d new incidents indexed across %d libraries.", total, len(targets))
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Axiom Debug offline indexer")
-    parser.add_argument("--library", help="Index only this one library (by pypi name)")
+    parser.add_argument("--library", help="Index only this one library (by package name)")
+    parser.add_argument(
+        "--language",
+        help="Index only libraries for this language (python, javascript)",
+    )
     args = parser.parse_args()
 
-    asyncio.run(main(args.library))
+    asyncio.run(main(args.library, args.language))

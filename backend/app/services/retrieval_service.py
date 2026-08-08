@@ -41,13 +41,16 @@ class RetrievalService:
 
     @staticmethod
     async def _dense_search(
-        db: AsyncSession, query_vector: list[float], library: str | None
+        db: AsyncSession, query_vector: list[float], library: str | None,
+        language: str | None = None,
     ) -> list[tuple[OSSIncident, float]]:
         distance = OSSIncident.embedding.cosine_distance(query_vector)
 
         stmt = select(OSSIncident, distance.label("distance"))
         if library:
             stmt = stmt.where(OSSIncident.library == library)
+        if language:
+            stmt = stmt.where(OSSIncident.language == language)
         stmt = stmt.order_by(distance).limit(DENSE_LIMIT)
 
         result = await db.execute(stmt)
@@ -55,7 +58,8 @@ class RetrievalService:
 
     @staticmethod
     async def _sparse_search(
-        db: AsyncSession, query_text: str, query_vector: list[float], library: str | None
+        db: AsyncSession, query_text: str, query_vector: list[float], library: str | None,
+        language: str | None = None,
     ) -> list[tuple[OSSIncident, float]]:
         """Keyword search, but still reporting cosine distance.
 
@@ -71,6 +75,8 @@ class RetrievalService:
         )
         if library:
             stmt = stmt.where(OSSIncident.library == library)
+        if language:
+            stmt = stmt.where(OSSIncident.language == language)
         stmt = stmt.order_by(func.ts_rank(OSSIncident.search_text, tsquery).desc())
         stmt = stmt.limit(SPARSE_LIMIT)
 
@@ -105,13 +111,16 @@ class RetrievalService:
         query_text: str,
         library: str | None = None,
         top_k: int = 5,
+        language: str | None = None,
     ) -> list[MatchedIssue]:
         query_vector = await EmbeddingService.aembed_one(query_text)
 
         # Sequential on purpose: both share one AsyncSession, which is not
         # safe for concurrent use. Do not wrap these in asyncio.gather.
-        dense = await RetrievalService._dense_search(db, query_vector, library)
-        sparse = await RetrievalService._sparse_search(db, query_text, query_vector, library)
+        dense = await RetrievalService._dense_search(db, query_vector, library, language)
+        sparse = await RetrievalService._sparse_search(
+            db, query_text, query_vector, library, language
+        )
 
         fused = RetrievalService._fuse(dense, sparse)
 

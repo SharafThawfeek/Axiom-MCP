@@ -11,7 +11,9 @@ class AnalyzeRequest(BaseModel):
         max_length=500_000,
         description="Raw failing log or traceback, as pasted from CI."
     )
-    language: Literal["python"] = "python"
+    # Optional hint only. The parser detects the real language from the log
+    # itself, so a wrong or missing value here costs nothing.
+    language: Literal["python", "javascript"] | None = None
 
     # Optional `pip freeze` / requirements.txt paste. Not required — but
     # without it the version-check tool has no installed version to check
@@ -39,6 +41,10 @@ class StackFrame(BaseModel):
 
 class ParsedFailure(BaseModel):
     model_config = ConfigDict(from_attributes=True)
+
+    # Detected from the log, not taken from the request — a CI job often runs
+    # more than one toolchain, so what the caller claims is a hint at best.
+    language: str
 
     exception_type: str
     exception_message: str

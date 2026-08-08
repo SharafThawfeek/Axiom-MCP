@@ -40,7 +40,12 @@ async def _already_indexed(db: AsyncSession, urls: list[str]) -> set[str]:
     return {row[0] for row in result.all()}
 
 
-async def load(db: AsyncSession, library: str, incidents: list[ExtractedIncident]) -> int:
+async def load(
+    db: AsyncSession,
+    library: str,
+    incidents: list[ExtractedIncident],
+    language: str = "python",
+) -> int:
     """Embed and insert `incidents` for `library`. Returns how many were new."""
     if not incidents:
         return 0
@@ -67,6 +72,7 @@ async def load(db: AsyncSession, library: str, incidents: list[ExtractedIncident
             db.add(
                 OSSIncident(
                     library=library,
+                    language=language,
                     issue_number=incident.raw.number,
                     issue_url=incident.raw.url,
                     issue_title=_clean(incident.raw.title),

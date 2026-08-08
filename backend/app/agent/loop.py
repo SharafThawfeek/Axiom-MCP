@@ -224,7 +224,10 @@ async def run_agent(
 
     seen_incidents: dict[str, MatchedIssue] = {}
     finalized: dict = {}
-    executor = ToolExecutor(db, dependencies_text, seen_incidents, finalized)
+    # No parsed failure means no detected language; default to python so the
+    # version tool still has a registry to query rather than failing outright.
+    language = failure.language if failure else "python"
+    executor = ToolExecutor(db, dependencies_text, language, seen_incidents, finalized)
 
     user_message = _build_initial_message(log, failure, library_hint, dependencies_text, file_context)
     messages: list[dict] = [

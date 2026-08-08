@@ -33,7 +33,7 @@ async def test_load_failure_returns_zero_instead_of_propagating(monkeypatch):
     async def fake_extract(raw):
         return "one-extracted-incident"
 
-    async def fake_load(db, pypi_name, chunk):
+    async def fake_load(db, pypi_name, chunk, language="python"):
         raise RuntimeError("simulated DB failure")
 
     monkeypatch.setattr(indexer_main, "fetch_closed_issues", fake_fetch)
@@ -60,7 +60,7 @@ async def test_extractions_are_persisted_in_chunks_not_all_at_the_end(monkeypatc
     async def fake_extract(raw):
         return f"incident-{raw}"
 
-    async def fake_load(db, pypi_name, chunk):
+    async def fake_load(db, pypi_name, chunk, language="python"):
         load_calls.append(len(chunk))
         return len(chunk)
 
@@ -84,13 +84,15 @@ async def test_main_reaches_every_library_when_one_returns_zero(monkeypatch):
     # failure.
     calls = []
 
-    async def fake_index_library(pypi_name, repo):
+    async def fake_index_library(pypi_name, repo, language="python"):
         calls.append(pypi_name)
         return 0 if pypi_name == "pandas" else 1
 
     monkeypatch.setattr(indexer_main, "index_library", fake_index_library)
     monkeypatch.setattr(
-        indexer_main, "TARGET_LIBRARIES", [("pandas", "a/a"), ("numpy", "b/b")]
+        indexer_main,
+        "TARGET_LIBRARIES",
+        [("pandas", "a/a", "python"), ("numpy", "b/b", "python")],
     )
 
     await indexer_main.main(only_library=None)

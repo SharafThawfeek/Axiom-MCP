@@ -181,11 +181,15 @@ class ToolExecutor:
         self,
         db: AsyncSession,
         dependencies_text: str | None,
+        language: str,
         seen_incidents: dict[str, MatchedIssue],
         finalized: dict[str, Any],
     ):
         self.db = db
         self.dependencies_text = dependencies_text
+        # Picks the registry (PyPI vs npm) and how to read the caller's
+        # pasted dependency block. Detected from the log, not requested.
+        self.language = language
         self.seen_incidents = seen_incidents
         self.finalized = finalized
 
@@ -222,7 +226,13 @@ class ToolExecutor:
             return json.dumps({"error": f"Invalid arguments for {name}: {exc}"})
 
     async def _search_incidents(self, query: str, library: str | None = None) -> str:
-        results = await RetrievalService.search(self.db, query, library=library)
+        # Language comes from the detected failure, not from the model — it
+        # isn't asked for as a tool argument because there's nothing for the
+        # agent to judge here, and a wrong guess would silently hide the
+        # right answer.
+        results = await RetrievalService.search(
+            self.db, query, library=library, language=self.language
+        )
 
         for r in results:
             self.seen_incidents[r.incident_id] = r
@@ -294,9 +304,11 @@ class ToolExecutor:
     async def _check_latest_version(self, package: str) -> str:
         installed = None
         if self.dependencies_text:
-            installed = VersionService.installed_version(self.dependencies_text, package)
+            installed = VersionService.installed_version(
+                self.dependencies_text, package, self.language
+            )
 
-        verdict = await VersionService.verdict(package, installed)
+        verdict = await VersionService.verdict(package, installed, self.language)
         self.version_verdicts.append(verdict)
         return json.dumps(verdict.model_dump())
 
