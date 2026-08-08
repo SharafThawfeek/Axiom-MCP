@@ -27,17 +27,23 @@ jobs:
       - name: Run tests
         run: pytest
 
-  # Manual-mode: on a CI failure, ask Axiom Debug what went wrong and post
-  # the diagnosis as a PR comment. Nothing gets fixed or pushed automatically
-  # — this only tells the developer what broke and why, where they're
-  # already looking. Requires AXIOM_API_URL (a repo variable) pointing at a
-  # reachable Axiom Debug deployment; skips cleanly if it isn't set, since
-  # GitHub's runners can't reach a developer's localhost.
+  # On a CI failure, ask Axiom Debug what went wrong. AXIOM_MODE (a repo
+  # variable) picks how far it goes:
+  #   manual    (default) — post the diagnosis as a PR comment. Nothing else
+  #             touches git.
+  #   review    — same, plus any suggested fix shown as a reviewable diff.
+  #   automatic — apply the fix on a new branch, run the test suite, and
+  #             only if that's clean, push the branch and open a PR. Never
+  #             commits to the branch that triggered it.
+  # Requires AXIOM_API_URL (a repo variable) pointing at a reachable Axiom
+  # Debug deployment; skips cleanly if it isn't set, since GitHub's runners
+  # can't reach a developer's localhost.
   report-failure:
     needs: test
     if: failure() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
+      contents: write
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
@@ -47,10 +53,25 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Ask Axiom Debug what went wrong
-        run: python .github/scripts/report_ci_failure.py failure.log comment.md
+      - name: Configure git identity
+        if: vars.AXIOM_MODE == 'automatic'
+        run: |
+          git config user.name "axiom-debug[bot]"
+          git config user.email "axiom-debug@users.noreply.github.com"
+
+      - name: React to the failure
+        run: |
+          if [ "${AXIOM_MODE}" = "automatic" ]; then
+            python .github/scripts/apply_fix.py failure.log comment.md
+          else
+            python .github/scripts/report_ci_failure.py failure.log comment.md
+          fi
         env:
           AXIOM_API_URL: ${{ vars.AXIOM_API_URL }}
+          AXIOM_MODE: ${{ vars.AXIOM_MODE }}
+          AXIOM_TEST_COMMAND: ${{ vars.AXIOM_TEST_COMMAND }}
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_BASE_REF: ${{ github.event.pull_request.base.ref }}
 
       - name: Post the diagnosis as a PR comment
         if: hashFiles('comment.md') != ''

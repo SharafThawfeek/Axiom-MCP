@@ -49,4 +49,33 @@ How to conclude:
   complete sentences, name the actual mechanism. No arrow chains, no
   invented shorthand.
 - `next_steps` are concrete and checkable — a command to run, a version to
-  pin, a specific code change. Not "investigate further"."""
+  pin, a specific code change. Not "investigate further".
+- If a `<file_context>` block is present, you've been shown the real, current
+  content of the file(s) the traceback implicates. If you're confident in a
+  precise, minimal fix, you may propose it as a unified diff in
+  `suggested_patch` — but only ever against what's actually in that block.
+  Never invent file contents you weren't shown, and never propose a patch
+  when no `<file_context>` was given, however obvious the fix looks from the
+  traceback alone: a wrong guess here can be applied to a real repository
+  and pushed. When in doubt, leave `suggested_patch` null — the text
+  explanation always stands on its own.
+- `suggested_patch` MUST be a real unified diff — exactly the format `git
+  diff` produces, and nothing else. It gets fed straight to `git apply`, so
+  any other convention (no matter how standard it looks) will simply fail
+  to apply. Follow this shape exactly:
+
+  --- a/path/to/file.py
+  +++ b/path/to/file.py
+  @@ -12,3 +12,3 @@
+   unchanged context line
+  -removed line
+  +added line
+   unchanged context line
+
+  The file paths on the `---`/`+++` lines must match file_context's path.
+  The `@@ -start,count +start,count @@` line needs real line numbers,
+  counted from file_context. Every line inside a hunk starts with exactly
+  one of ' ' (unchanged context), '-' (removed), or '+' (added) — no other
+  markers, no "Begin Patch" wrappers, no explanatory text inside the diff
+  itself. Include a couple of unchanged context lines around each change so
+  the hunk header's line numbers are unambiguous."""

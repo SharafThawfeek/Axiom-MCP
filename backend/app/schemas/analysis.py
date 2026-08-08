@@ -20,6 +20,13 @@ class AnalyzeRequest(BaseModel):
     # a bound, not just the obviously-large one.
     dependencies: str | None = Field(default=None, max_length=50_000)
 
+    # Real content of the file(s) the traceback implicates, if the caller has
+    # repo access and can provide it (e.g. a CI job that already checked out
+    # the code). Without this the agent only ever sees the single source line
+    # a traceback happens to print — not enough to safely propose a patch
+    # against. suggested_patch is only ever produced when this is present.
+    file_context: str | None = Field(default=None, max_length=100_000)
+
 
 class StackFrame(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -64,6 +71,13 @@ class Analysis(BaseModel):
     confidence: Literal["high", "medium", "low"]
     suspected_library: str | None = None
     next_steps: list[str]
+
+    # A minimal unified diff against file_context, only ever produced when
+    # file_context was provided and the agent is confident enough for a
+    # precise, reviewable fix — never fabricated against a file it hasn't
+    # actually seen. Null means "no safe patch to propose," not "no fix
+    # exists" — the text explanation above always stands on its own.
+    suggested_patch: str | None = None
 
 
 class AnalysisResponse(BaseModel):

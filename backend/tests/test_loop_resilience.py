@@ -95,8 +95,8 @@ class _FakeResponse:
         self.choices = [_FakeChoice(_FakeMessage(tool_calls))]
 
 
-def _finalize_response(name="finalize_analysis", call_id="call_1"):
-    return _FakeResponse([_FakeToolCall(call_id, name, json.dumps(FINALIZE_ARGS))])
+def _finalize_response(name="finalize_analysis", call_id="call_1", args=None):
+    return _FakeResponse([_FakeToolCall(call_id, name, json.dumps(args or FINALIZE_ARGS))])
 
 
 class _ScriptedClient:
@@ -177,6 +177,32 @@ async def test_verifier_failure_does_not_crash_a_successful_analysis(monkeypatch
 
     assert result.analysis.summary == FINALIZE_ARGS["summary"]
     assert result.analysis.confidence == "high"  # not downgraded — verification didn't run, wasn't failed
+
+
+@pytest.mark.asyncio
+async def test_patch_is_dropped_when_no_file_context_was_given(monkeypatch):
+    # The agent claiming a patch with nothing real to diff against can only
+    # be fabricating it — this is the actual safety boundary, not the prompt.
+    args_with_patch = {**FINALIZE_ARGS, "suggested_patch": "--- a/utils.py\n+++ b/utils.py\n"}
+    client = _ScriptedClient([_finalize_response(args=args_with_patch)])
+    monkeypatch.setattr(agent_loop, "get_client", lambda: client)
+
+    result = await agent_loop.run_agent(db=None, log=LOG, failure=parse(LOG), file_context=None)
+
+    assert result.analysis.suggested_patch is None
+
+
+@pytest.mark.asyncio
+async def test_patch_survives_when_file_context_was_given(monkeypatch):
+    args_with_patch = {**FINALIZE_ARGS, "suggested_patch": "--- a/utils.py\n+++ b/utils.py\n"}
+    client = _ScriptedClient([_finalize_response(args=args_with_patch)])
+    monkeypatch.setattr(agent_loop, "get_client", lambda: client)
+
+    result = await agent_loop.run_agent(
+        db=None, log=LOG, failure=parse(LOG), file_context="def process(frame):\n    return frame.append(row)\n",
+    )
+
+    assert result.analysis.suggested_patch == args_with_patch["suggested_patch"]
 
 
 @pytest.mark.asyncio

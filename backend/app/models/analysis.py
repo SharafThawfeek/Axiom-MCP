@@ -41,6 +41,13 @@ class Analysis(Base):
     suspected_library: Mapped[str | None] = mapped_column(String(100))
     next_steps: Mapped[list[str]] = mapped_column(ARRAY(String))
 
+    # A unified diff, only ever populated when the request included real
+    # file_context — never fabricated against a file the agent hasn't seen.
+    # Served on a direct GET /analyze/{id} lookup; deliberately NOT served on
+    # a cache hit (see AnalysisService.analyse) since a patch is only safe
+    # against the exact file content it was generated from.
+    suggested_patch: Mapped[str | None] = mapped_column(Text)
+
     matched_incident_ids: Mapped[list[uuid.UUID]] = mapped_column(
         ARRAY(PG_UUID(as_uuid=True)),
         default=list,

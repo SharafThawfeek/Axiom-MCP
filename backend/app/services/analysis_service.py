@@ -123,6 +123,7 @@ class AnalysisService:
                 confidence=row.confidence,
                 suspected_library=row.suspected_library,
                 next_steps=row.next_steps,
+                suggested_patch=row.suggested_patch,
             ),
             matched_issues=matched_issues,
             agent_trace=row.agent_trace,
@@ -134,6 +135,7 @@ class AnalysisService:
         db: AsyncSession,
         log: str,
         dependencies: str | None = None,
+        file_context: str | None = None,
     ) -> AnalysisResponse:
         failure = parse(log)
         library_hint = implicated_library(failure) if failure else None
@@ -149,7 +151,14 @@ class AnalysisService:
                     failure.signature, cached.id,
                     datetime.now(timezone.utc) - cached.created_at,
                 )
-                return await AnalysisService._row_to_response(db, cached, from_cache=True)
+                response = await AnalysisService._row_to_response(db, cached, from_cache=True)
+                # A patch is only ever safe against the exact file content it
+                # was generated from. The cached explanation still holds (same
+                # underlying failure), but the file may have changed since —
+                # never hand a stale patch to something that might auto-apply
+                # it. Fresh runs always regenerate their own.
+                response.analysis.suggested_patch = None
+                return response
         else:
             logger.info("No traceback parsed; agent works from raw log")
 
@@ -159,6 +168,7 @@ class AnalysisService:
             failure=failure,
             library_hint=library_hint,
             dependencies_text=dependencies,
+            file_context=file_context,
         )
 
         row = AnalysisRow(
@@ -172,6 +182,7 @@ class AnalysisService:
             confidence=result.analysis.confidence,
             suspected_library=_clean(result.analysis.suspected_library),
             next_steps=[_clean(step) for step in result.analysis.next_steps],
+            suggested_patch=_clean(result.analysis.suggested_patch),
             matched_incident_ids=[
                 uuid.UUID(m.incident_id) for m in result.matched_issues
             ],

@@ -23,6 +23,7 @@ async def analyze(payload: AnalyzeRequest, db: AsyncSession = Depends(get_db)):
             db=db,
             log=payload.log,
             dependencies=payload.dependencies,
+            file_context=payload.file_context,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

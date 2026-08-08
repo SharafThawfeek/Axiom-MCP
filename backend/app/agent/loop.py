@@ -97,6 +97,7 @@ def _salvage_tool_call_from_error(exc: BadRequestError) -> tuple[str, dict] | No
     if REQUIRED_FINALIZE_FIELDS.issubset(arguments):
         arguments.setdefault("suspected_library", None)
         arguments.setdefault("cited_incident_ids", [])
+        arguments.setdefault("suggested_patch", None)
         return "finalize_analysis", arguments
 
     return None
@@ -136,11 +137,15 @@ async def _create_completion(client, messages: list[dict]):
             await asyncio.sleep(wait)
 
 
+MAX_FILE_CONTEXT_CHARS = 20_000
+
+
 def _build_initial_message(
     log: str,
     failure: ParsedFailure | None,
     library_hint: str | None,
     dependencies_text: str | None,
+    file_context: str | None,
 ) -> str:
     trimmed = log
     if len(log) > MAX_LOG_CHARS:
@@ -170,6 +175,17 @@ def _build_initial_message(
     if dependencies_text:
         parts.append(f"<dependencies>\n{dependencies_text.strip()[:5000]}\n</dependencies>")
 
+    if file_context:
+        parts.append(
+            "<file_context>\n"
+            f"{file_context.strip()[:MAX_FILE_CONTEXT_CHARS]}\n"
+            "</file_context>\n"
+            "This is the real, current content of the file(s) implicated by the "
+            "traceback. If you're confident in a precise, minimal fix, you may "
+            "propose it as a unified diff in suggested_patch — but only against "
+            "what's actually shown above, never a file you haven't seen."
+        )
+
     parts.append(
         "Investigate this failure using your tools, then call finalize_analysis "
         "with your complete answer."
@@ -184,6 +200,7 @@ async def run_agent(
     failure: ParsedFailure | None,
     library_hint: str | None = None,
     dependencies_text: str | None = None,
+    file_context: str | None = None,
 ) -> AnalysisResponse:
     client = get_client()  # raises ValueError before any tool/DB work if unconfigured
 
@@ -191,7 +208,7 @@ async def run_agent(
     finalized: dict = {}
     executor = ToolExecutor(db, dependencies_text, seen_incidents, finalized)
 
-    user_message = _build_initial_message(log, failure, library_hint, dependencies_text)
+    user_message = _build_initial_message(log, failure, library_hint, dependencies_text, file_context)
     messages: list[dict] = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_message},
@@ -299,6 +316,16 @@ async def run_agent(
         logger.warning("Agent returned invalid confidence %r; defaulting to low", confidence)
         confidence = "low"
 
+    suggested_patch = data.get("suggested_patch")
+    if suggested_patch and not file_context:
+        # No file_context means there was nothing real to diff against — a
+        # patch here can only be fabricated. Drop it rather than let a
+        # hallucinated diff reach Automatic mode's git apply, regardless of
+        # what the prompt asked for; this is the actual safety boundary; the
+        # prompt is just a request.
+        logger.warning("Agent produced a suggested_patch with no file_context; dropping it")
+        suggested_patch = None
+
     analysis = Analysis(
         summary=data["summary"],
         root_cause=data["root_cause"],
@@ -306,6 +333,7 @@ async def run_agent(
         confidence=confidence,
         suspected_library=data.get("suspected_library"),
         next_steps=data["next_steps"],
+        suggested_patch=suggested_patch,
     )
 
     cited_ids = data["cited_incident_ids"]

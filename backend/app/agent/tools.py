@@ -143,6 +143,19 @@ TOOL_SCHEMAS: list[dict] = [
                             "id you haven't seen."
                         ),
                     },
+                    "suggested_patch": {
+                        "type": ["string", "null"],
+                        "description": (
+                            "A minimal fix for the failure, ONLY if <file_context> was provided "
+                            "and you're confident in a precise, narrow fix grounded in that real "
+                            "file content. MUST be a real unified diff (--- a/, +++ b/, "
+                            "@@ -n,m +n,m @@ with real line numbers) — exactly what `git diff` "
+                            "produces, nothing else; it goes straight to `git apply`, so any "
+                            "other convention just fails. Null if no file_context was given, or "
+                            "the fix isn't small and certain enough to apply automatically. "
+                            "Never invent file contents you weren't shown."
+                        ),
+                    },
                 },
                 # Strict mode requires every property in `required` — optionality
                 # is expressed via nullable types instead. This is deliberate: it's
@@ -151,6 +164,7 @@ TOOL_SCHEMAS: list[dict] = [
                 "required": [
                     "summary", "root_cause", "explanation", "confidence",
                     "next_steps", "suspected_library", "cited_incident_ids",
+                    "suggested_patch",
                 ],
                 "additionalProperties": False,
             },
@@ -286,6 +300,7 @@ class ToolExecutor:
         next_steps: list[str],
         suspected_library: str | None = None,
         cited_incident_ids: list[str] | None = None,
+        suggested_patch: str | None = None,
     ) -> str:
         self.finalized["data"] = {
             "summary": summary,
@@ -295,5 +310,6 @@ class ToolExecutor:
             "next_steps": next_steps,
             "suspected_library": suspected_library,
             "cited_incident_ids": cited_incident_ids or [],
+            "suggested_patch": suggested_patch,
         }
         return "Analysis recorded."
