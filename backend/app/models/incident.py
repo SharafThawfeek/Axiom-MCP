@@ -46,10 +46,17 @@ class OSSIncident(Base):
         Vector(settings.EMBEDDING_DIM)
     )
 
+    # Includes resolution_summary deliberately: the sparse half of hybrid
+    # search exists to catch exact technical tokens the dense pass smooths
+    # over, and distinctive identifiers (a method name, an internal API like
+    # `_from_sequence`) very often appear only in how the bug was FIXED, not
+    # in how it was reported. Confirmed live: with resolution text excluded,
+    # keyword-searching real fix identifiers matched nothing at all.
     search_text: Mapped[str] = mapped_column(
         TSVECTOR,
         Computed(
-            "to_tsvector('english', coalesce(issue_title, '') || ' ' || coalesce(problem_summary, ''))",
+            "to_tsvector('english', coalesce(issue_title, '') || ' ' || "
+            "coalesce(problem_summary, '') || ' ' || coalesce(resolution_summary, ''))",
             persisted=True,
         ),
     )

@@ -9,6 +9,7 @@ the whole index needs re-embedding — see migrations/versions for where the
 """
 
 import asyncio
+import threading
 
 from fastembed import TextEmbedding
 
@@ -16,11 +17,22 @@ from app.config import settings
 
 _model: TextEmbedding | None = None
 
+# aembed_one dispatches to a worker thread, so a burst of concurrent cold
+# requests hits _get_model() from several threads at once. Without this
+# lock the `if _model is None` check races: measured live, 8 concurrent
+# cold embeds constructed 8 separate models — ~130MB of ONNX weights each,
+# a real memory spike and 3.25s of redundant loading for work that should
+# happen once. Double-checked locking: the fast path stays lock-free once
+# the model exists, so the steady state costs nothing.
+_model_lock = threading.Lock()
+
 
 def _get_model() -> TextEmbedding:
     global _model
     if _model is None:
-        _model = TextEmbedding(model_name=settings.EMBEDDING_MODEL)
+        with _model_lock:
+            if _model is None:
+                _model = TextEmbedding(model_name=settings.EMBEDDING_MODEL)
     return _model
 
 
