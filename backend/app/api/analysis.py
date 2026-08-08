@@ -26,15 +26,15 @@ async def analyze(payload: AnalyzeRequest, db: AsyncSession = Depends(get_db)):
             file_context=payload.file_context,
         )
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.get("/{analysis_id}", response_model=AnalysisResponse)
 async def get_analysis(analysis_id: str, db: AsyncSession = Depends(get_db)):
     try:
         parsed_id = uuid.UUID(analysis_id)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid analysis id.")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="Invalid analysis id.") from e
 
     result = await db.execute(select(AnalysisRow).where(AnalysisRow.id == parsed_id))
     row = result.scalar_one_or_none()

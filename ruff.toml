@@ -1,0 +1,68 @@
+# Lint configuration for Axiom Debug.
+#
+# The point of this file is that `ruff check` should come back clean, so a
+# new finding actually means something. A permanently-noisy linter gets
+# ignored, which is worse than no linter — so anything deliberately allowed
+# is listed here with the reason, rather than left to re-appear as noise on
+# every run.
+
+line-length = 100
+
+exclude = [
+    "venv",
+    # Alembic writes these from its own template (typing.Sequence,
+    # Union[...] annotations). They're historical records of applied
+    # migrations — rewriting their annotations to satisfy a linter changes
+    # committed history for zero behavioural gain.
+    "backend/migrations/versions",
+]
+
+[lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "BLE", "PLW", "ISC", "PIE"]
+
+ignore = [
+    # Deliberate broad excepts. Every one is at a boundary where degrading
+    # gracefully beats propagating: the CI scripts must never be the reason
+    # a real build shows red, and the citation verifier is a secondary check
+    # that shouldn't discard an already-successful analysis. Each is
+    # documented at its call site.
+    "BLE001",
+    # subprocess.run(..., check=False) is exactly what's wanted — returncode
+    # is inspected explicitly everywhere so failures become structured
+    # (ok, reason) results rather than exceptions.
+    "PLW1510",
+    # `db: AsyncSession = Depends(get_db)` is the standard FastAPI idiom,
+    # not an accidental mutable default.
+    "B008",
+    # Collapsing nested ifs would produce a single five-clause condition in
+    # the traceback parser, where the outer test ("is there an indented
+    # line") and inner test ("is it a source line rather than a caret or a
+    # frame") are genuinely separate ideas.
+    "SIM102",
+    # Line length is enforced loosely; long explanatory comments and prompt
+    # strings are more readable unwrapped than hard-wrapped mid-sentence.
+    "E501",
+    # `global` is how the lazily-initialised module singletons work (the
+    # Groq/Gemini clients and the embedding model). They're initialised once
+    # behind a lock and never reassigned afterwards — the alternative is a
+    # class wrapper that adds indirection for no behavioural gain.
+    "PLW0603",
+]
+
+[lint.isort]
+# Without this, `app` and `indexer` get sorted in with httpx/pytest/groq as
+# third-party, which makes the import blocks actively misleading about what
+# belongs to this project.
+known-first-party = ["app", "indexer", "evals"]
+
+[lint.per-file-ignores]
+# Package __init__ files exist to re-export a stable public surface; the
+# imports are the point. __all__ is declared in each, which is the
+# idiomatic way to say so.
+"backend/app/**/__init__.py" = ["F401"]
+
+# Test doubles are deliberately minimal stand-ins for SDK response objects.
+# RUF012 (annotate mutable class defaults with ClassVar) and PLW0108
+# (inline the lambda) both push toward ceremony that makes a throwaway stub
+# harder to read, not safer.
+"**/test_*.py" = ["RUF012", "PLW0108"]

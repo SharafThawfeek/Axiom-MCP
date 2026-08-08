@@ -58,7 +58,12 @@ async def load(db: AsyncSession, library: str, incidents: list[ExtractedIncident
         batch = fresh[i : i + BATCH_SIZE]
         vectors = EmbeddingService.embed_many([inc.problem_summary for inc in batch])
 
-        for incident, vector in zip(batch, vectors):
+        # strict=True on purpose: a length mismatch here means the embedder
+        # returned fewer vectors than incidents, and plain zip() would
+        # silently drop the surplus — losing crawled incidents with no error
+        # and no log line. Better to fail the chunk loudly (index_library
+        # already isolates a chunk failure) than to under-index in silence.
+        for incident, vector in zip(batch, vectors, strict=True):
             db.add(
                 OSSIncident(
                     library=library,

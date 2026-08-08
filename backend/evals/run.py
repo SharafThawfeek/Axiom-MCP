@@ -16,7 +16,7 @@ from pathlib import Path
 
 from app.database import SessionLocal
 from app.services.retrieval_service import RetrievalService
-from evals.retrieval import aggregate, reciprocal_rank, recall_at_k
+from evals.retrieval import aggregate, recall_at_k, reciprocal_rank
 
 CASES_PATH = Path(__file__).parent / "cases.jsonl"
 
@@ -24,8 +24,8 @@ CASES_PATH = Path(__file__).parent / "cases.jsonl"
 def load_cases() -> list[dict]:
     cases = []
     with open(CASES_PATH, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
+        for raw_line in f:
+            line = raw_line.strip()
             if line:
                 cases.append(json.loads(line))
     return cases

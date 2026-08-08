@@ -1,5 +1,5 @@
-from evals.retrieval import aggregate, reciprocal_rank, recall_at_k
 from app.schemas.incident import Citation, MatchedIssue
+from evals.retrieval import aggregate, recall_at_k, reciprocal_rank
 
 
 def _result(url: str) -> MatchedIssue:

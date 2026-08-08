@@ -23,9 +23,8 @@ reworded while ~0.5 is unrelated infrastructure. That's the number to
 threshold on, and the number the agent is shown.
 """
 
-import asyncio
 
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings

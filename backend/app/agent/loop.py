@@ -8,6 +8,7 @@ is hit.
 """
 
 import asyncio
+import contextlib
 import json
 import re
 import uuid
@@ -121,14 +122,14 @@ async def _create_completion(client, messages: list[dict]):
             if attempt == MAX_INTERACTIVE_RATE_LIMIT_RETRIES:
                 raise
 
+            # A missing/garbage retry-after just means falling back to the
+            # cap, which is already assigned — nothing to handle.
             wait = INTERACTIVE_RETRY_CAP_SECONDS
-            try:
+            with contextlib.suppress(AttributeError, TypeError, ValueError):
                 wait = min(
                     float(exc.response.headers.get("retry-after", wait)),
                     INTERACTIVE_RETRY_CAP_SECONDS,
                 )
-            except (AttributeError, TypeError, ValueError):
-                pass
 
             logger.info(
                 "Analysis call rate-limited, retrying in %.1fs (attempt %d/%d)",

@@ -2,7 +2,6 @@
 script is exactly the kind of thing where "the logic looks right" isn't
 good enough; git apply either actually works against a real diff or it
 doesn't."""
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -95,8 +94,10 @@ def test_parses_real_captured_openai_style_patch():
     assert hunks == [(
         "/app/etl/transform.py",
         "def run(frame, new_row):\n    return frame.append(new_row, ignore_index=True)",
-        "def run(frame, new_row):\n    new_row_df = pd.DataFrame([new_row])\n    "
-        "return pd.concat([frame, new_row_df], ignore_index=True)",
+        (
+            "def run(frame, new_row):\n    new_row_df = pd.DataFrame([new_row])\n    "
+            "return pd.concat([frame, new_row_df], ignore_index=True)"
+        ),
     )]
 
 
@@ -110,7 +111,7 @@ def test_applies_real_captured_openai_style_patch_end_to_end(real_repo):
     target.parent.mkdir(parents=True)
     target.write_text("def run(frame, new_row):\n    return frame.append(new_row, ignore_index=True)\n")
 
-    applied, reason = apply_fix.try_apply_patch(REAL_OPENAI_STYLE_PATCH_1)
+    applied, _reason = apply_fix.try_apply_patch(REAL_OPENAI_STYLE_PATCH_1)
 
     assert applied is True
     assert "pd.concat" in target.read_text()
@@ -126,7 +127,7 @@ def test_second_real_captured_patch_also_applies(real_repo):
         "    return total\n"
     )
 
-    applied, reason = apply_fix.try_apply_patch(REAL_OPENAI_STYLE_PATCH_2)
+    applied, _reason = apply_fix.try_apply_patch(REAL_OPENAI_STYLE_PATCH_2)
 
     assert applied is True
     assert "pd.concat" in target.read_text()
@@ -160,7 +161,7 @@ def test_try_apply_patch_succeeds_with_a_real_valid_patch(real_repo):
     target = real_repo / "utils.py"
     patch = _real_diff_for(real_repo, target, "def process(frame):\n    return pd.concat([frame, row])\n")
 
-    applied, reason = apply_fix.try_apply_patch(patch)
+    applied, _reason = apply_fix.try_apply_patch(patch)
 
     assert applied is True
     assert "pd.concat" in target.read_text()

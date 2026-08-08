@@ -47,8 +47,8 @@ class AnalysisService:
             return None
 
         pins = []
-        for line in dependencies.splitlines():
-            line = line.split("#", 1)[0].strip().lower()
+        for raw_line in dependencies.splitlines():
+            line = raw_line.split("#", 1)[0].strip().lower()
             if line:
                 pins.append(re.sub(r"\s+", "", line))
 
