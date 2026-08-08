@@ -1,4 +1,14 @@
+# Python
 venv/
 __pycache__/
 *.pyc
+.pytest_cache/
+
+# Environment
 .env
+.env.*
+!.env.example
+
+# IDE
+.vscode/
+.idea/

@@ -1,0 +1,29 @@
+name: axiom-debug
+
+services:
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: axiom-debug-postgres
+
+    environment:
+      POSTGRES_USER: axiom
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: axiom_debug
+
+    ports:
+      - "5434:5432"
+
+    volumes:
+      - axiom_debug_postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U axiom -d axiom_debug"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    restart: unless-stopped
+
+volumes:
+  axiom_debug_postgres_data:

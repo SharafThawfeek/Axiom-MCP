@@ -1,0 +1,3 @@
+{"query": "AttributeError: DataFrame object has no attribute 'append'", "library": "pandas", "expected_issue_url": "https://github.com/pandas-dev/pandas/issues/35407"}
+{"query": "requests.exceptions.ConnectionError: Max retries exceeded", "library": "requests", "expected_issue_url": "https://github.com/psf/requests/issues/8375"}
+{"query": "ImportError: cannot import name 'url_quote' from 'werkzeug.urls'", "library": "flask", "expected_issue_url": "https://github.com/pallets/flask/issues/5391"}
