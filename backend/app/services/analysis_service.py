@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.loop import run_agent
 from app.config import settings
+from app.core.exceptions import AnalysisFailed
 from app.core.logger import logger
 from app.models.analysis import Analysis as AnalysisRow
 from app.models.incident import OSSIncident
@@ -162,14 +163,21 @@ class AnalysisService:
         else:
             logger.info("No traceback parsed; agent works from raw log")
 
-        result = await run_agent(
-            db=db,
-            log=log,
-            failure=failure,
-            library_hint=library_hint,
-            dependencies_text=dependencies,
-            file_context=file_context,
-        )
+        try:
+            result = await run_agent(
+                db=db,
+                log=log,
+                failure=failure,
+                library_hint=library_hint,
+                dependencies_text=dependencies,
+                file_context=file_context,
+            )
+        except ValueError as exc:
+            # run_agent speaks ValueError so it stays framework-agnostic and
+            # unit-testable. Translating at the service boundary is what
+            # keeps the HTTP surface consistent with the rest of the shared
+            # backend, where services raise AppException and routes stay bare.
+            raise AnalysisFailed(str(exc)) from exc
 
         row = AnalysisRow(
             id=uuid.uuid4(),

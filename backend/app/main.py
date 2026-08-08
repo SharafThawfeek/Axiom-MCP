@@ -5,6 +5,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import analysis_router, health_router
 from app.config import settings
+from app.core.exceptions import (
+    AppException,
+    app_exception_handler,
+    global_exception_handler,
+)
 
 
 @asynccontextmanager
@@ -29,6 +34,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Registered in the same order as the shared backend, so every error
+# response across both halves has the same {"error": ...} shape rather than
+# this half returning FastAPI's default {"detail": ...}.
+app.add_exception_handler(Exception, global_exception_handler)
+app.add_exception_handler(AppException, app_exception_handler)
 
 app.include_router(health_router)
 app.include_router(analysis_router)
