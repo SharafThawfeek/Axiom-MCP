@@ -25,6 +25,18 @@ import urllib.request
 TIMEOUT_SECONDS = 90
 MAX_FILE_CONTEXT_CHARS = 20_000
 
+# GitHub caps issue/PR comment bodies at 65,536 characters — a real,
+# documented limit that's broken other tools in production (Renovate,
+# docker/scout-action, among others), not a theoretical concern.
+# suggested_patch has no length bound anywhere upstream (the model has been
+# observed adding full docstrings to a "minimal" fix), so a verbose one plus
+# the explanation could exceed it — and unlike every other failure mode in
+# this pipeline, an oversized body fails the *final* `gh pr comment` step
+# outright, with no fallback after it, defeating the whole "this should
+# never be why CI shows red" principle. Real headroom below the hard limit,
+# not cutting it close.
+MAX_COMMENT_CHARS = 60_000
+
 # Mirrors backend/app/parsers/traceback.py's FRAME/VENDOR_MARKERS — this
 # script is intentionally standalone (no dependency on the backend package),
 # so the minimal bit of parsing it actually needs is duplicated, not shared.
@@ -72,10 +84,16 @@ def format_comment(analysis: dict, show_patch: bool) -> str:
 
     patch = analysis.get("suggested_patch")
     if show_patch and patch:
-        comment += (
-            "\n\n<details><summary>📎 Suggested fix (review before applying)</summary>\n\n"
-            f"```diff\n{patch}\n```\n\n</details>"
-        )
+        prefix = "\n\n<details><summary>📎 Suggested fix (review before applying)</summary>\n\n```diff\n"
+        suffix = "\n```\n\n</details>"
+        budget = MAX_COMMENT_CHARS - len(comment) - len(prefix) - len(suffix)
+        if len(patch) > budget:
+            note = "\n... (truncated — patch too large to include in full here)"
+            patch = patch[:max(budget - len(note), 0)] + note
+        comment += prefix + patch + suffix
+
+    if len(comment) > MAX_COMMENT_CHARS:  # final safety net either way
+        comment = comment[:MAX_COMMENT_CHARS - 20] + "\n\n*(truncated)*"
 
     return comment
 

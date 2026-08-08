@@ -43,13 +43,27 @@ jobs:
     if: failure() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
+      # Specifying this key sets every unlisted scope to `none` — actions:
+      # read is easy to miss precisely because the default token has it
+      # implicitly when no `permissions:` block is present at all. Without
+      # it explicitly here, `gh run view --log-failed` (fetching the test
+      # job's log, the very first step below) would fail on every real run.
+      actions: read
       contents: write
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
 
       - name: Fetch the failed job's log
-        run: gh run view ${{ github.run_id }} --log-failed > failure.log
+        # Naming the job explicitly rather than `--log-failed` (which fetches
+        # all failed jobs via a zip bundle of the whole run) — this job
+        # itself is still executing when this runs, and gh's docs flag
+        # "platform limitations" associating jobs with logs via that zip
+        # path specifically while a run is still in progress. --job is the
+        # documented way to fetch one specific job's log regardless.
+        run: |
+          JOB_ID=$(gh run view "${{ github.run_id }}" --json jobs -q '.jobs[] | select(.name=="test") | .databaseId')
+          gh run view --job "$JOB_ID" --log > failure.log
         env:
           GH_TOKEN: ${{ github.token }}
 

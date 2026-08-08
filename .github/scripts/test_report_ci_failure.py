@@ -54,6 +54,26 @@ def test_no_patch_shows_nothing_extra_even_in_review_mode():
     assert "Suggested fix" not in comment
 
 
+def test_oversized_patch_is_truncated_to_stay_under_github_limit():
+    # GitHub's real hard limit is 65,536 characters — this is comfortably
+    # over even that, to prove the truncation kicks in rather than just
+    # coincidentally staying under budget.
+    huge_patch = "+line\n" * 20_000  # ~120,000 chars
+    analysis = {**ANALYSIS, "suggested_patch": huge_patch}
+
+    comment = format_comment(analysis, show_patch=True)
+
+    assert len(comment) <= 65_536
+    assert len(comment) <= report_ci_failure.MAX_COMMENT_CHARS
+    assert "truncated" in comment
+
+
+def test_normal_sized_patch_is_not_truncated():
+    comment = format_comment(ANALYSIS, show_patch=True)
+    assert "truncated" not in comment
+    assert ANALYSIS["suggested_patch"] in comment
+
+
 def test_find_implicated_file_skips_vendor_frames():
     # The last frame is site-packages (pandas internals) — the caller's own
     # utils.py, one frame up, is the one that actually matters.
