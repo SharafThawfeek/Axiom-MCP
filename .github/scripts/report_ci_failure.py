@@ -22,8 +22,26 @@ import re
 import sys
 import urllib.request
 
-TIMEOUT_SECONDS = 90
+# Verified live: a real "no traceback parsed, work from raw log" analysis
+# — the harder case, more agent iterations — took ~110s end-to-end on
+# Groq's free tier, mostly rate-limit retry waits (see loop.py's
+# MAX_INTERACTIVE_RATE_LIMIT_RETRIES). 90s cut that off before it finished;
+# this leaves real margin above the observed worst case, not just past it.
+TIMEOUT_SECONDS = 180
 MAX_FILE_CONTEXT_CHARS = 20_000
+
+# A full CI job log fetched via the Actions API is raw and noisy — checkout,
+# dependency install, every passing test — none of it diagnostic. Verified
+# live: a real 53KB job log measured at ~24,300 tokens (a ~2.2 chars/token
+# density, denser than prose because of timestamps and short lines), which
+# blew straight through Groq's free-tier 8000 TPM ceiling on a single
+# request and made /analyze itself 400. The backend's own MAX_LOG_CHARS
+# (60,000 chars) assumes a clean, already-relevant traceback, not a raw job
+# log at this density — nowhere near a safe cap for this content type.
+# Keeping the tail (like the backend's own truncation) rather than the head:
+# the actual failure and its traceback are what's near the end of a job log,
+# after all the setup noise, not before it.
+MAX_LOG_CHARS_FOR_ANALYSIS = 12_000
 
 # GitHub caps issue/PR comment bodies at 65,536 characters — a real,
 # documented limit that's broken other tools in production (Renovate,
@@ -60,6 +78,14 @@ def _is_js_vendor(path: str) -> bool:
     if normalised.startswith(_JS_VENDOR_PREFIXES):
         return True
     return any(marker in normalised for marker in _JS_VENDOR_MARKERS)
+
+
+def truncate_log_for_analysis(log_text: str) -> str:
+    """Shared between this module's main() and apply_fix.py's — both send a
+    freshly-fetched job log to /analyze and both need the same cap."""
+    if len(log_text) <= MAX_LOG_CHARS_FOR_ANALYSIS:
+        return log_text
+    return "[log truncated — showing the final portion]\n" + log_text[-MAX_LOG_CHARS_FOR_ANALYSIS:]
 
 
 def find_implicated_file(log_text: str) -> str | None:
@@ -161,7 +187,7 @@ def main() -> int:
         return 0
 
     with open(log_path, encoding="utf-8", errors="replace") as f:
-        log_text = f.read()
+        log_text = truncate_log_for_analysis(f.read())
 
     implicated = find_implicated_file(log_text)
     file_context = resolve_file_context(implicated, os.getcwd()) if implicated else None

@@ -22,7 +22,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from report_ci_failure import analyze, find_implicated_file, format_comment, resolve_file_context
+from report_ci_failure import (
+    analyze,
+    find_implicated_file,
+    format_comment,
+    resolve_file_context,
+    truncate_log_for_analysis,
+)
 
 # GitHub Actions sets an unset `vars.X` as an empty string, not an absent
 # key — dict.get()'s default only applies to a truly missing key, so an
@@ -203,7 +209,7 @@ def main() -> int:
         return 0
 
     with open(log_path, encoding="utf-8", errors="replace") as f:
-        log_text = f.read()
+        log_text = truncate_log_for_analysis(f.read())
 
     implicated = find_implicated_file(log_text)
     file_context = resolve_file_context(implicated, os.getcwd()) if implicated else None
