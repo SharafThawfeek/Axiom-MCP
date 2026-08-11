@@ -55,15 +55,18 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Fetch the failed job's log
-        # Naming the job explicitly rather than `--log-failed` (which fetches
-        # all failed jobs via a zip bundle of the whole run) — this job
-        # itself is still executing when this runs, and gh's docs flag
-        # "platform limitations" associating jobs with logs via that zip
-        # path specifically while a run is still in progress. --job is the
-        # documented way to fetch one specific job's log regardless.
+        # `gh run view --job <id> --log` refuses to serve ANY job's log
+        # until the whole RUN is marked complete — verified live, not
+        # assumed: this job is itself a job in that same run (`needs: test`
+        # puts it downstream, not in a separate run), so "the whole run is
+        # complete" can never be true while this step is executing. Not a
+        # timing race that a retry would fix — a structural deadlock.
+        # The raw REST endpoint has no such restriction: it only requires
+        # the target job itself to be complete, which `test` already is by
+        # the time this runs.
         run: |
           JOB_ID=$(gh run view "${{ github.run_id }}" --json jobs -q '.jobs[] | select(.name=="test") | .databaseId')
-          gh run view --job "$JOB_ID" --log > failure.log
+          gh api "repos/${{ github.repository }}/actions/jobs/$JOB_ID/logs" > failure.log
         env:
           GH_TOKEN: ${{ github.token }}
 
