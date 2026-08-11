@@ -14,6 +14,7 @@ import re
 import uuid
 
 from groq import APIError, APIStatusError, BadRequestError, RateLimitError
+from langsmith import get_current_run_tree, traceable
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.client import get_client
@@ -104,6 +105,11 @@ def _salvage_tool_call_from_error(exc: BadRequestError) -> tuple[str, dict] | No
     return None
 
 
+@traceable(
+    run_type="llm",
+    name="groq_chat_completion",
+    metadata={"ls_provider": "groq", "ls_model_name": settings.ANALYSIS_MODEL},
+)
 async def _create_completion(client, messages: list[dict]):
     """One completion call, retrying a bounded number of times on RateLimitError.
 
@@ -113,11 +119,19 @@ async def _create_completion(client, messages: list[dict]):
     """
     for attempt in range(MAX_INTERACTIVE_RATE_LIMIT_RETRIES + 1):
         try:
-            return await client.chat.completions.create(
+            response = await client.chat.completions.create(
                 model=settings.ANALYSIS_MODEL,
                 messages=messages,
                 tools=TOOL_SCHEMAS,
             )
+            run = get_current_run_tree()
+            if run is not None and response.usage:
+                run.set(usage_metadata={
+                    "input_tokens": response.usage.prompt_tokens,
+                    "output_tokens": response.usage.completion_tokens,
+                    "total_tokens": response.usage.total_tokens,
+                })
+            return response
         except RateLimitError as exc:
             if attempt == MAX_INTERACTIVE_RATE_LIMIT_RETRIES:
                 raise
@@ -212,6 +226,7 @@ def _pick_version_verdict(verdicts: list, suspected_library: str | None):
     return verdicts[0]
 
 
+@traceable(run_type="chain", name="run_agent")
 async def run_agent(
     db: AsyncSession,
     log: str,
@@ -265,7 +280,7 @@ async def run_agent(
                     "function": {"name": name, "arguments": json.dumps(arguments)},
                 }],
             })
-            result = await executor.execute(name, arguments)
+            result = await executor.execute(name, arguments, langsmith_extra={"name": name})
             messages.append({"role": "tool", "tool_call_id": call_id, "content": result})
             trace.append({"tool": name, "input": json.dumps(arguments), "recovered": True})
 
@@ -314,7 +329,7 @@ async def run_agent(
             except json.JSONDecodeError:
                 result = json.dumps({"error": "Malformed tool-call arguments JSON."})
             else:
-                result = await executor.execute(name, arguments)
+                result = await executor.execute(name, arguments, langsmith_extra={"name": name})
 
             trace.append({"tool": name, "input": tool_call.function.arguments})
             messages.append(

@@ -8,9 +8,9 @@ explanation grounded in how other developers actually solved the same
 failure — with citations back to the original issue and the commit that
 fixed it, and a version verdict if the failure looks version-related.
 
-Built as a standalone service. Designed to integrate later into
-[axiom-ai](https://github.com/sharaf-ahmd/axiom-ai), a collaborative project —
-see [Architecture](#architecture) for how the two fit together.
+Runs as a standalone service, driven primarily through its GitHub Actions
+integration — see [CI integration](#ci-integration-three-modes-one-setting)
+below.
 
 ## Why an agent, not a fixed pipeline
 
@@ -167,14 +167,6 @@ infrastructure/
                           (automatic) — stdlib-only, no install step needed
                           for their own standalone CI job
 ```
-
-Every layer mirrors the conventions of the shared `axiom-ai` backend (thin
-routers, static-method service classes, `ValueError` → `HTTPException`,
-SQLAlchemy 2.0 `Mapped[]` models) so integrating this into that repo later is
-close to a straight copy. The only seam is three files this project owns
-that the shared repo owns differently — `config.py`, `database.py`,
-`models/base.py` — everything else imports from those by name and doesn't
-know which version it's talking to.
 
 ## Setup
 

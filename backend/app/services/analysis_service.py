@@ -3,6 +3,7 @@ import re
 import uuid
 from datetime import datetime, timedelta, timezone
 
+from langsmith import get_current_run_tree, traceable
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -132,6 +133,7 @@ class AnalysisService:
         )
 
     @staticmethod
+    @traceable(run_type="chain", name="analyse")
     async def analyse(
         db: AsyncSession,
         log: str,
@@ -141,6 +143,8 @@ class AnalysisService:
         failure = parse(log)
         library_hint = implicated_library(failure) if failure else None
         fingerprint = AnalysisService._fingerprint(dependencies)
+
+        run = get_current_run_tree()
 
         if failure:
             logger.info("Parsed failure: %s", failure.signature)
@@ -152,6 +156,8 @@ class AnalysisService:
                     failure.signature, cached.id,
                     datetime.now(timezone.utc) - cached.created_at,
                 )
+                if run is not None:
+                    run.metadata["cache_status"] = "hit"
                 response = await AnalysisService._row_to_response(db, cached, from_cache=True)
                 # A patch is only ever safe against the exact file content it
                 # was generated from. The cached explanation still holds (same
@@ -162,6 +168,9 @@ class AnalysisService:
                 return response
         else:
             logger.info("No traceback parsed; agent works from raw log")
+
+        if run is not None:
+            run.metadata["cache_status"] = "miss"
 
         try:
             result = await run_agent(

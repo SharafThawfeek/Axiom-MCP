@@ -24,6 +24,7 @@ threshold on, and the number the agent is shown.
 """
 
 
+from langsmith import traceable
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,6 +36,26 @@ from app.services.embedding_service import EmbeddingService
 RRF_K = 60  # standard RRF damping constant
 DENSE_LIMIT = 20
 SPARSE_LIMIT = 20
+
+
+def _as_retriever_documents(results: list[MatchedIssue]) -> dict:
+    """Shapes search() output for LangSmith's retriever-run rendering, which
+    expects a list of {page_content, metadata} documents rather than an
+    arbitrary return value."""
+    return {
+        "documents": [
+            {
+                "page_content": f"{m.title}\n\n{m.resolution_summary}",
+                "metadata": {
+                    "incident_id": m.incident_id,
+                    "library": m.library,
+                    "similarity": m.similarity,
+                    "rank_score": m.rank_score,
+                },
+            }
+            for m in results
+        ]
+    }
 
 
 class RetrievalService:
@@ -106,6 +127,7 @@ class RetrievalService:
         ]
 
     @staticmethod
+    @traceable(run_type="retriever", name="search_incidents", process_outputs=_as_retriever_documents)
     async def search(
         db: AsyncSession,
         query_text: str,

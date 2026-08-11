@@ -17,6 +17,7 @@ httpx==0.28.1
 logfire==4.40.0
 logfire[fastapi]==4.40.0
 logfire[sqlalchemy]==4.40.0
+langsmith==0.10.17
 
 pytest==9.1.1
 pytest-asyncio==1.4.0

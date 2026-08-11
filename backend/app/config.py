@@ -1,3 +1,5 @@
+import os
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -6,7 +8,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "Axiom Debug"
     ENVIRONMENT: str = "development"
 
-    DATABASE_URL: str = "postgresql+asyncpg://axiom:password@localhost:5434/axiom_debug"
+    DATABASE_URL: str = "postgresql+asyncpg://axiom:password@localhost:5435/axiom_mcp"
 
     # Validated at call time, not at startup — lets the app boot (health
     # checks, docs) without a key, and only /analyze needs one. Groq is the
@@ -58,6 +60,15 @@ class Settings(BaseSettings):
 
     LOGFIRE_TOKEN: str = ""
 
+    # LangSmith tracing (optional) — full agent-loop visibility (both LLM
+    # calls, every tool call, retrieval) via @traceable in agent/loop.py,
+    # agent/tools.py, agent/verifier.py, and services/*.py. Left off,
+    # tracing silently no-ops; no code path depends on it.
+    LANGSMITH_TRACING: bool = False
+    LANGSMITH_API_KEY: str = ""
+    LANGSMITH_PROJECT: str = "axiom-mcp"
+    LANGSMITH_ENDPOINT: str = ""
+
     # Comma-separated origins allowed to call the API from a browser.
     # Defaults cover a local Vite/Next dev server; set explicitly in prod.
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
@@ -72,3 +83,16 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# The langsmith SDK reads LANGSMITH_* straight from os.environ (lazily, but
+# cached on first read — see langsmith.utils.get_env_var), not from this
+# Settings object. Without this, .env values would load here and the SDK
+# would never see them, and tracing would silently no-op. Set once, here,
+# before any @traceable-decorated call can possibly run.
+if settings.LANGSMITH_TRACING:
+    os.environ.setdefault("LANGSMITH_TRACING", "true")
+    if settings.LANGSMITH_API_KEY:
+        os.environ.setdefault("LANGSMITH_API_KEY", settings.LANGSMITH_API_KEY)
+    os.environ.setdefault("LANGSMITH_PROJECT", settings.LANGSMITH_PROJECT)
+    if settings.LANGSMITH_ENDPOINT:
+        os.environ.setdefault("LANGSMITH_ENDPOINT", settings.LANGSMITH_ENDPOINT)

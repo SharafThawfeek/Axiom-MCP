@@ -15,6 +15,8 @@ Two layers:
 
 import json
 
+from langsmith import get_current_run_tree, traceable
+
 from app.agent.client import get_client
 from app.config import settings
 from app.core.logger import logger
@@ -68,6 +70,11 @@ def filter_valid_citations(
     return valid
 
 
+@traceable(
+    run_type="llm",
+    name="citation_verifier",
+    metadata={"ls_provider": "groq", "ls_model_name": settings.VERIFIER_MODEL},
+)
 async def verify_semantic_consistency(
     analysis: Analysis,
     cited_issues: list[MatchedIssue],
@@ -104,6 +111,14 @@ async def verify_semantic_consistency(
         ],
         response_format={"type": "json_schema", "json_schema": VERIFIER_SCHEMA},
     )
+
+    run = get_current_run_tree()
+    if run is not None and response.usage:
+        run.set(usage_metadata={
+            "input_tokens": response.usage.prompt_tokens,
+            "output_tokens": response.usage.completion_tokens,
+            "total_tokens": response.usage.total_tokens,
+        })
 
     text = response.choices[0].message.content
     if not text:

@@ -37,22 +37,54 @@ MAX_FILE_CONTEXT_CHARS = 20_000
 # not cutting it close.
 MAX_COMMENT_CHARS = 60_000
 
-# Mirrors backend/app/parsers/traceback.py's FRAME/VENDOR_MARKERS — this
-# script is intentionally standalone (no dependency on the backend package),
-# so the minimal bit of parsing it actually needs is duplicated, not shared.
-_FRAME = re.compile(r'File "(?P<file>.+?)", line (?P<line>\d+)')
-_VENDOR_MARKERS = ("site-packages", "dist-packages", "/usr/lib/python", "\\lib\\python", "<frozen ")
+# Mirrors backend/app/parsers/python.py and javascript.py's FRAME/vendor
+# markers — this script is intentionally standalone (no dependency on the
+# backend package), so the minimal bit of parsing it actually needs is
+# duplicated, not shared. Axiom Debug analyzes both Python and JS/TS
+# failures (see the backend's language registry), so both trace shapes are
+# recognised here too — otherwise a JS/TS caller would silently never get
+# file_context, and suggested_patch would never fire for them.
+_PY_FRAME = re.compile(r'File "(?P<file>.+?)", line (?P<line>\d+)')
+_PY_VENDOR_MARKERS = ("site-packages", "dist-packages", "/usr/lib/python", "\\lib\\python", "<frozen ")
+
+# V8/Node: "at fn (file:line:col)" or "at file:line:col" — frames run
+# innermost-first (opposite of Python), so the first non-vendor match is
+# the one that matters, not the last.
+_JS_FRAME = re.compile(r"^\s*at\s+(?:.+?\s+\()?(?P<file>[^()\s][^()]*?):\d+:\d+\)?\s*$", re.MULTILINE)
+_JS_VENDOR_MARKERS = ("node_modules",)
+_JS_VENDOR_PREFIXES = ("node:", "internal/")
+
+
+def _is_js_vendor(path: str) -> bool:
+    normalised = path.replace("\\", "/")
+    if normalised.startswith(_JS_VENDOR_PREFIXES):
+        return True
+    return any(marker in normalised for marker in _JS_VENDOR_MARKERS)
 
 
 def find_implicated_file(log_text: str) -> str | None:
-    """The last non-vendor file path mentioned in a traceback — same "deepest
-    frame that's actually the caller's own code" heuristic the backend parser
-    uses, reimplemented here since this script can't import that package."""
-    candidates = [
-        m.group("file") for m in _FRAME.finditer(log_text)
-        if not any(marker in m.group("file") for marker in _VENDOR_MARKERS)
+    """The file path most likely to be the caller's own code, whichever
+    language's trace shape is present — same "deepest frame that's actually
+    the caller's" heuristic the backend's parsers use, reimplemented here
+    since this script can't import that package.
+
+    Tries Python's shape first (frames run outermost -> innermost, so the
+    LAST non-vendor match wins); a Python-shaped log is unambiguous — a
+    JS/TS log never contains a `File "...", line N` frame — so falling
+    through to the JS shape only happens for an actual JS/TS trace.
+    """
+    py_candidates = [
+        m.group("file") for m in _PY_FRAME.finditer(log_text)
+        if not any(marker in m.group("file") for marker in _PY_VENDOR_MARKERS)
     ]
-    return candidates[-1] if candidates else None
+    if py_candidates:
+        return py_candidates[-1]
+
+    js_candidates = [
+        m.group("file") for m in _JS_FRAME.finditer(log_text)
+        if not _is_js_vendor(m.group("file"))
+    ]
+    return js_candidates[0] if js_candidates else None
 
 
 def resolve_file_context(path: str, repo_root: str) -> str | None:

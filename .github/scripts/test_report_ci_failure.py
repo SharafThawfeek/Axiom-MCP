@@ -24,6 +24,12 @@ LOG = '''Traceback (most recent call last):
 AttributeError: 'DataFrame' object has no attribute 'append'
 '''
 
+JS_LOG = '''TypeError: Cannot read properties of undefined (reading 'name')
+    at getUser (/home/runner/work/repo/repo/src/users.js:14:22)
+    at /home/runner/work/repo/repo/node_modules/express/lib/router/index.js:284:15
+    at processTicksAndRejections (node:internal/process/task_queues:95:5)
+'''
+
 
 def test_format_comment_includes_every_field():
     comment = format_comment(ANALYSIS, show_patch=False)
@@ -82,6 +88,21 @@ def test_find_implicated_file_skips_vendor_frames():
 
 def test_find_implicated_file_returns_none_for_no_traceback():
     assert find_implicated_file("just some build output, no traceback here") is None
+
+
+def test_find_implicated_file_handles_js_stack_traces():
+    # JS frames run innermost-first, opposite of Python — the caller's own
+    # users.js is the FIRST frame, not the last (which is a node internal).
+    assert find_implicated_file(JS_LOG) == "/home/runner/work/repo/repo/src/users.js"
+
+
+def test_find_implicated_file_skips_node_modules_and_node_internals():
+    only_vendor_log = (
+        "TypeError: boom\n"
+        "    at /home/runner/work/repo/repo/node_modules/express/lib/router/index.js:284:15\n"
+        "    at processTicksAndRejections (node:internal/process/task_queues:95:5)\n"
+    )
+    assert find_implicated_file(only_vendor_log) is None
 
 
 def test_resolve_file_context_reads_a_real_file(tmp_path):

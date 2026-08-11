@@ -14,6 +14,7 @@ box that ends the loop.
 import json
 from typing import Any
 
+from langsmith import traceable
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -207,6 +208,7 @@ class ToolExecutor:
         # can legitimately check more than one package.
         self.version_verdicts: list[VersionVerdict] = []
 
+    @traceable(run_type="tool", name="tool_call")
     async def execute(self, name: str, arguments: dict) -> str:
         handler = {
             "search_incidents": self._search_incidents,
