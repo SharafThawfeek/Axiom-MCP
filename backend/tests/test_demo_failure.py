@@ -1,5 +1,7 @@
 """Deliberately broken. Proves the CI -> Axiom Debug loop end-to-end on a
 real PR against a real, deployed backend. Delete this file once verified.
+
+Second attempt: re-testing after fixing report-failure's log-fetch step.
 """
 
 
