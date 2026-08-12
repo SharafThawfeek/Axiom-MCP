@@ -1,4 +1,4 @@
-from app.agent.tools import SEARCH_SUMMARY_CHARS, _truncate
+from axiom_debug.agent.tools import SEARCH_SUMMARY_CHARS, _truncate
 
 
 def test_short_text_is_unchanged():

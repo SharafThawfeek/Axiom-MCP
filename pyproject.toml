@@ -1,0 +1,104 @@
+[project]
+name = "axiom-debug-mcp"
+version = "0.1.0"
+description = "Failure memory for your codebase, over MCP — recall how your team actually fixed this failure before."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Sharaf Thawfeek" }]
+keywords = ["mcp", "model-context-protocol", "debugging", "ci", "observability", "rag"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Debuggers",
+]
+
+# Pinned exactly, matching this project's existing convention: every version
+# here is one the test suite has actually run against, not a range that
+# resolves to something untested on a fresh install.
+#
+# The local install is deliberately lean — no Postgres driver, no FastAPI, no
+# LLM clients. `uvx axiom-debug-mcp` gets a stdio server backed by SQLite and
+# nothing else; everything heavier lives behind an optional extra.
+dependencies = [
+    # Targets MCP spec 2026-07-28 (stateless core). 3.x targets the
+    # superseded 2025-11-25 revision. Beta, pinned deliberately — see
+    # docs/DECISIONS.md.
+    "fastmcp==4.0.0b2",
+
+    "pydantic==2.12.4",
+    "pydantic-settings==2.14.2",
+    "sqlalchemy==2.0.51",
+    "aiosqlite==0.21.0",
+    "httpx==0.28.1",
+
+    # ONNX runtime, not PyTorch: ~130MB and no API key, which is what makes a
+    # zero-infra local install viable at all.
+    "fastembed==0.8.0",
+    "numpy==2.3.4",
+]
+
+[project.optional-dependencies]
+# The hosted deployment: Postgres + pgvector for the OSS corpus, FastAPI for
+# the existing HTTP surface, and the LLM clients the optional agent path uses.
+server = [
+    "fastapi==0.141.1",
+    "uvicorn[standard]==0.52.1",
+    "asyncpg==0.31.0",
+    "psycopg2-binary==2.9.12",
+    "alembic==1.19.0",
+    "pgvector==0.5.0",
+    "groq==1.6.0",
+    "openai==2.53.0",
+    "langsmith==0.10.17",
+    "python-dotenv==1.2.2",
+]
+# Offline developer tooling: the GitHub crawler and the retrieval-quality
+# harness. Never needed by an MCP client.
+indexer = [
+    "groq==1.6.0",
+    "openai==2.53.0",
+    "httpx==0.28.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/SharafThawfeek/Axiom-MCP"
+Repository = "https://github.com/SharafThawfeek/Axiom-MCP"
+Issues = "https://github.com/SharafThawfeek/Axiom-MCP/issues"
+
+# What `uvx axiom-debug-mcp` runs: stdio transport, the local-IDE case. The
+# hosted Streamable HTTP surface is mounted into the FastAPI app instead and
+# does not go through this entrypoint.
+[project.scripts]
+axiom-debug-mcp = "axiom_debug.mcp.server:main"
+
+# PEP 735. Excluded from the wheel and from `uv sync --no-dev`.
+[dependency-groups]
+dev = [
+    "pytest==9.1.1",
+    "pytest-asyncio==1.4.0",
+    "ruff==0.16.1",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# indexer/ and evals/ are excluded on purpose: offline developer tooling, not
+# part of what an MCP client installs.
+[tool.hatch.build.targets.wheel]
+packages = ["backend/axiom_debug"]
+
+[tool.uv]
+# fastmcp 4.x is pre-release, and it splits itself across fastmcp-slim, so
+# "explicit" (pre-releases only for packages pinned by name here) can't
+# resolve the transitive half. Reproducibility comes from uv.lock pinning
+# every resolved version anyway — that's the real guarantee, not this flag.
+prerelease = "allow"
+
+[tool.pytest.ini_options]
+pythonpath = ["backend"]
+testpaths = ["backend/tests"]
+asyncio_mode = "auto"

@@ -18,10 +18,9 @@ import json
 
 import httpx
 import pytest
+from axiom_debug.agent import loop as agent_loop
+from axiom_debug.parsers import parse
 from groq import APIConnectionError, RateLimitError
-
-from app.agent import loop as agent_loop
-from app.parsers import parse
 
 LOG = """Traceback (most recent call last):
   File "/app/utils.py", line 17, in process

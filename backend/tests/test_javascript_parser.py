@@ -7,8 +7,8 @@ ends. Getting that backwards silently blames the wrong file, which is why
 origin selection is tested per language rather than assumed shared.
 """
 
-from app.parsers import SUPPORTED_LANGUAGES, implicated_library, parse
-from app.parsers.javascript import library_of
+from axiom_debug.parsers import SUPPORTED_LANGUAGES, implicated_library, parse
+from axiom_debug.parsers.javascript import library_of
 
 NODE_TRACE = """> app@1.0.0 test
 TypeError: Cannot read properties of undefined (reading 'name')

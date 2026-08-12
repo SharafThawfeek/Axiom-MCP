@@ -4,12 +4,12 @@ Skips issues already indexed (by issue_url) so re-running the indexer after
 adding a library, or after a crawl was interrupted, doesn't duplicate rows.
 """
 
+from axiom_debug.core.logger import logger
+from axiom_debug.models.incident import OSSIncident
+from axiom_debug.services.embedding_service import EmbeddingService
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.logger import logger
-from app.models.incident import OSSIncident
-from app.services.embedding_service import EmbeddingService
 from indexer.extract import ExtractedIncident
 
 BATCH_SIZE = 32  # embedding batch — bounds peak memory, not a correctness constraint

@@ -1,4 +1,4 @@
-from app.parsers import implicated_library, parse
+from axiom_debug.parsers import implicated_library, parse
 
 SIMPLE = """
 Traceback (most recent call last):

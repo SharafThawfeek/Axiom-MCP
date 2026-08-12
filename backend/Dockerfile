@@ -9,4 +9,4 @@ COPY . .
 
 # Railway injects PORT at runtime; fall back to 8000 for local `docker build`/`docker run`.
 ENV PORT=8000
-CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT}
+CMD uvicorn axiom_debug.main:app --host 0.0.0.0 --port ${PORT}

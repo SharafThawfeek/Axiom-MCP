@@ -3,8 +3,8 @@ check several packages. Picking the wrong one is quietly misleading — a
 reader sees a verdict about numpy under an analysis that blames pandas — so
 the choice needs to be deliberate rather than "whatever came last".
 """
-from app.agent.loop import _pick_version_verdict
-from app.schemas.analysis import VersionVerdict
+from axiom_debug.agent.loop import _pick_version_verdict
+from axiom_debug.schemas.analysis import VersionVerdict
 
 PANDAS = VersionVerdict(package="pandas", installed_version="1.5.3", verdict="behind")
 NUMPY = VersionVerdict(package="numpy", installed_version="1.24.0", verdict="latest")

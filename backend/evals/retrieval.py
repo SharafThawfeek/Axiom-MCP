@@ -5,7 +5,7 @@ Both metrics are computed from a single ranked result list, so they're pure
 and testable without touching the database or an LLM.
 """
 
-from app.schemas.incident import MatchedIssue
+from axiom_debug.schemas.incident import MatchedIssue
 
 
 def recall_at_k(results: list[MatchedIssue], expected_url: str, k: int) -> bool:

@@ -1,4 +1,4 @@
-from app.services.analysis_service import AnalysisService, _clean
+from axiom_debug.services.analysis_service import AnalysisService, _clean
 
 fingerprint = AnalysisService._fingerprint
 

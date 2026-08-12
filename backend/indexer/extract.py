@@ -16,12 +16,12 @@ MAX_RATE_LIMIT_RETRIES first.
 import asyncio
 import json
 
+from axiom_debug.agent.client import get_client, get_extraction_client
+from axiom_debug.config import settings
+from axiom_debug.core.logger import logger
 from groq import RateLimitError as GroqRateLimitError
 from openai import RateLimitError as GeminiRateLimitError
 
-from app.agent.client import get_client, get_extraction_client
-from app.config import settings
-from app.core.logger import logger
 from indexer.github import RawIssue
 
 MAX_RATE_LIMIT_RETRIES = 6

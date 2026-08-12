@@ -14,8 +14,9 @@ import asyncio
 import json
 from pathlib import Path
 
-from app.database import SessionLocal
-from app.services.retrieval_service import RetrievalService
+from axiom_debug.database import SessionLocal
+from axiom_debug.services.retrieval_service import RetrievalService
+
 from evals.retrieval import aggregate, recall_at_k, reciprocal_rank
 
 CASES_PATH = Path(__file__).parent / "cases.jsonl"

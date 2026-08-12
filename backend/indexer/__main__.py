@@ -11,8 +11,9 @@ GROQ_API_KEY in backend/.env.
 import argparse
 import asyncio
 
-from app.core.logger import logger
-from app.database import SessionLocal
+from axiom_debug.core.logger import logger
+from axiom_debug.database import SessionLocal
+
 from indexer.extract import extract
 from indexer.github import fetch_closed_issues
 from indexer.libraries import TARGET_LIBRARIES

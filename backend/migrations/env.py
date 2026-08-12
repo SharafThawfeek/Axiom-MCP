@@ -7,12 +7,11 @@ sys.path.append(
 
 from logging.config import fileConfig
 
+import axiom_debug.models  # noqa: F401 — import registers OSSIncident + Analysis on Base.metadata
 from alembic import context
+from axiom_debug.config import settings
+from axiom_debug.models.base import Base
 from sqlalchemy import engine_from_config, pool
-
-import app.models  # noqa: F401 — import registers OSSIncident + Analysis on Base.metadata
-from app.config import settings
-from app.models.base import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

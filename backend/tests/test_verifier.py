@@ -1,5 +1,5 @@
-from app.agent.verifier import filter_valid_citations
-from app.schemas.incident import Citation, MatchedIssue
+from axiom_debug.agent.verifier import filter_valid_citations
+from axiom_debug.schemas.incident import Citation, MatchedIssue
 
 
 def _issue(incident_id: str) -> MatchedIssue:

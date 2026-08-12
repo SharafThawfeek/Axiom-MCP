@@ -6,7 +6,7 @@ and Groq's server-side name validation rejects the whole request for it.
 """
 import json
 
-from app.agent.loop import _clean_tool_name, _salvage_tool_call_from_error
+from axiom_debug.agent.loop import _clean_tool_name, _salvage_tool_call_from_error
 
 
 class FakeBadRequest:

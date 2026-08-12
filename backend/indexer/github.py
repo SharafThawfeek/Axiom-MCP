@@ -10,9 +10,8 @@ even for public repos.
 """
 
 import httpx
-
-from app.config import settings
-from app.core.logger import logger
+from axiom_debug.config import settings
+from axiom_debug.core.logger import logger
 
 GRAPHQL_URL = "https://api.github.com/graphql"
 
