@@ -1,0 +1,47 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "name": "io.github.SharafThawfeek/axiom-debug",
+  "description": "Recall how your team already fixed this build failure, from a private per-project index.",
+  "version": "0.1.0",
+  "websiteUrl": "https://github.com/SharafThawfeek/Axiom-MCP",
+  "repository": {
+    "url": "https://github.com/SharafThawfeek/Axiom-MCP",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "axiom-debug-mcp",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "AXIOM_MEMORY_URL",
+          "description": "SQLAlchemy URL for failure memory. Defaults to a local SQLite file under ~/.axiom-debug; set this to share memory across a team via Postgres.",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "AXIOM_PROJECT_ID",
+          "description": "Pins the project scope. Defaults to a hash of the git remote, so every clone of a repository shares one memory. Set it to split a monorepo.",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "AXIOM_CORPUS_URL",
+          "description": "Postgres+pgvector URL for the optional public OSS incident corpus. Unset means the corpus tools are not registered at all.",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "AXIOM_ENABLE_AGENT",
+          "description": "Opt in to the LLM-backed analyze_failure tool. Off by default: every other tool answers in milliseconds with no model call.",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}

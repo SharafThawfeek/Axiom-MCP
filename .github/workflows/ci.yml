@@ -8,24 +8,91 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-          cache-dependency-path: backend/requirements.txt
+      # The standalone installer rather than a pinned setup action: uv
+      # resolves and caches its own environment from uv.lock, so the action's
+      # main contribution would be a version number to keep current.
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
 
+      # --frozen: fail if uv.lock and pyproject.toml have drifted, rather
+      # than silently re-resolving. CI must test the pinned set, not a fresh
+      # resolution that nobody has run locally.
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: uv sync --frozen --extra server --extra indexer
+
+      # Previously unenforced — ruff.toml existed but nothing ran it.
+      - name: Lint
+        run: uv run ruff check backend .github
 
       - name: Run tests
-        run: pytest
+        run: uv run pytest -q
+
+  # Enforces the architectural invariant that makes `uvx axiom-debug-mcp`
+  # viable: the published wheel must install without FastAPI, a Postgres
+  # driver, pgvector, or any LLM client. Those live behind optional extras.
+  # Without this check the base dependency list rots the first time someone
+  # adds a convenient top-level import, and nobody notices until a user's
+  # zero-infrastructure install pulls 400MB.
+  package:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      - name: Build wheel
+        run: uv build --wheel
+
+      - name: Install into a clean environment
+        run: |
+          uv venv /tmp/lean
+          VIRTUAL_ENV=/tmp/lean uv pip install --prerelease=allow dist/*.whl
+
+      - name: Assert no heavy dependency leaked in
+        run: |
+          BANNED='^(fastapi|asyncpg|psycopg2|psycopg2-binary|pgvector|groq|openai|langsmith|alembic) '
+          if VIRTUAL_ENV=/tmp/lean uv pip list | grep -iE "$BANNED"; then
+            echo "::error::A server-only dependency leaked into the base install."
+            exit 1
+          fi
+          echo "Lean install verified."
+
+      - name: Smoke-test the stdio entrypoint
+        # Boots the installed console script and asks it for its tool list
+        # over real JSON-RPC framing. Catches the class of break that unit
+        # tests cannot: a stray stdout write corrupting the protocol.
+        run: |
+          VIRTUAL_ENV=/tmp/lean uv pip install --prerelease=allow fastmcp==4.0.0b2
+          AXIOM_MEMORY_URL="sqlite+aiosqlite:////tmp/ci-memory.db" \
+          AXIOM_PROJECT_ID=ci \
+          /tmp/lean/bin/python - <<'PY'
+          import asyncio
+          from fastmcp import Client
+          from fastmcp.client.transports import StdioTransport
+
+          async def main():
+              t = StdioTransport(command="/tmp/lean/bin/axiom-debug-mcp", args=[])
+              async with Client(t) as c:
+                  names = sorted(x.name for x in await c.list_tools())
+                  print("tools:", names)
+                  assert "recall_failure_memory" in names, names
+                  result = await c.call_tool(
+                      "parse_failure",
+                      {"log": 'Traceback (most recent call last):\n'
+                              '  File "a.py", line 1, in f\n'
+                              'ValueError: bad input\n'},
+                  )
+                  assert result.data.exception_type == "ValueError", result.data
+                  print("signature:", result.data.signature)
+
+          asyncio.run(main())
+          PY
 
   # On a CI failure, ask Axiom Debug what went wrong. AXIOM_MODE (a repo
   # variable) picks how far it goes:

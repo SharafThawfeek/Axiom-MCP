@@ -1,0 +1,77 @@
+name: Publish
+
+# Triggered by publishing a GitHub Release, not by a tag push. A release is a
+# deliberate act with a human behind it; a tag can be created by accident or by
+# tooling, and a PyPI version number can never be reused once it exists.
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    # Named environment so branch/reviewer protection rules can be attached in
+    # repository settings. If the PyPI trusted publisher is configured with an
+    # environment name, it MUST match this string exactly or the OIDC exchange
+    # is refused.
+    environment: pypi
+
+    permissions:
+      # Required for Trusted Publishing. This is what mints the short-lived
+      # OIDC token PyPI exchanges for an upload credential — no long-lived
+      # API token exists anywhere, so there is nothing to leak or rotate.
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+
+      # A release tagged v0.2.0 that ships 0.1.0 is a silent, unfixable
+      # mistake: the wrong version goes out and 0.2.0 can never be published
+      # again. Cheaper to fail here.
+      - name: Verify the tag matches the packaged version
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PKG="$(uv version --short 2>/dev/null || grep -m1 '^version' pyproject.toml | cut -d'"' -f2)"
+          echo "tag=$TAG packaged=$PKG"
+          if [ "$TAG" != "$PKG" ]; then
+            echo "::error::Release tag ($TAG) does not match pyproject version ($PKG)."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: uv sync --frozen --extra server --extra indexer
+
+      # The release build is the last place to catch a broken publish, and
+      # unlike CI on a PR this one is irreversible.
+      - name: Lint
+        run: uv run ruff check backend .github
+
+      - name: Test
+        run: uv run pytest -q
+
+      - name: Build
+        run: uv build --wheel --sdist
+
+      # Same invariant CI enforces on every PR, re-checked against the exact
+      # artifact about to be published rather than a rebuild of it.
+      - name: Verify the base install stays lean
+        run: |
+          uv venv /tmp/lean
+          VIRTUAL_ENV=/tmp/lean uv pip install --prerelease=allow dist/*.whl
+          BANNED='^(fastapi|asyncpg|psycopg2|psycopg2-binary|pgvector|groq|openai|langsmith|alembic) '
+          if VIRTUAL_ENV=/tmp/lean uv pip list | grep -iE "$BANNED"; then
+            echo "::error::A server-only dependency leaked into the published wheel."
+            exit 1
+          fi
+
+      - name: Publish to PyPI
+        # `always` rather than `automatic`: automatic silently falls back to
+        # other credential sources if the OIDC exchange fails, which would
+        # turn a misconfigured publisher into a confusing auth error instead
+        # of a clear one.
+        run: uv publish --trusted-publishing always
