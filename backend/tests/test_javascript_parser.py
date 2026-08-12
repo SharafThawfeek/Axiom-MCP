@@ -43,10 +43,14 @@ def test_origin_is_the_callers_own_code_not_a_dependency():
     assert failure.origin.function == "getUser"
 
 
-def test_signature_normalises_volatile_parts():
+def test_signature_preserves_the_property_name():
+    """'reading X' for a different property X is a different bug — accessing
+    undefined.name and undefined.id fail in different code paths and should
+    not collapse onto one signature. See test_traceback_parser.py for the
+    same fix on the Python side, where it caused a real collision."""
     failure = parse(NODE_TRACE)
-    # The quoted property name varies between runs of the same bug.
-    assert "'<str>'" in failure.signature
+
+    assert "name" in failure.signature
     assert failure.signature.startswith("TypeError:")
     assert failure.signature.endswith("@ getUser")
 

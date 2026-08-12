@@ -116,9 +116,12 @@ async def test_parse_failure_extracts_a_normalised_signature(client):
 
     assert data.exception_type == "AttributeError"
     assert data.language == "python"
-    # The quoted literal is normalised out, which is what makes the signature
-    # stable across runs — assert that rather than the raw message.
-    assert "<str>" in data.signature
+    # The class and attribute name are the identity of the bug, not
+    # incidental data — they survive normalisation rather than being
+    # blanked to a shared placeholder. See test_traceback_parser.py for why:
+    # two different AttributeErrors used to collide onto one signature.
+    assert "DataFrame" in data.signature
+    assert "append" in data.signature
     assert "AttributeError" in data.signature
     assert data.origin.function == "normalise"
     assert data.origin.file.endswith("transform.py")

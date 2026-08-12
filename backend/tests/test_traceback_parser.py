@@ -50,12 +50,46 @@ def test_parses_simple_traceback():
     assert failure.frames[1].code == "return frame.append(row)"
 
 
-def test_signature_normalises_volatile_parts():
+def test_signature_preserves_identifier_names():
+    """The class and attribute name ARE the bug's identity, not incidental
+    data — blanking both to the same placeholder would make every
+    AttributeError at the same call depth collide onto one signature."""
     failure = parse(SIMPLE)
 
-    assert "'<str>'" in failure.signature
-    assert "DataFrame" not in failure.signature
+    assert "DataFrame" in failure.signature
+    assert "append" in failure.signature
     assert failure.signature.startswith("AttributeError:")
+
+
+def test_different_attribute_errors_do_not_collide():
+    """The actual bug this guards: two distinct AttributeErrors at the same
+    call depth used to normalise to the identical signature, so recording a
+    resolution for one silently overwrote the other's."""
+    other = parse(
+        'Traceback (most recent call last):\n'
+        '  File "/app/x.py", line 1, in <module>\n'
+        "    collection.dedupe_by_key('id')\n"
+        "AttributeError: 'ItemCollection' object has no attribute 'dedupe_by_key'\n"
+    )
+
+    assert other is not None
+    assert other.signature != parse(SIMPLE).signature
+
+
+def test_data_like_quoted_content_is_still_redacted():
+    """Not everything quoted is identity. A parsed value, a path, or a UUID
+    varies between two runs of the same underlying bug and should still
+    collapse to a placeholder rather than fragmenting the signature."""
+    failure = parse(
+        'Traceback (most recent call last):\n'
+        '  File "/app/parse.py", line 1, in <module>\n'
+        "    int(raw)\n"
+        "ValueError: invalid literal for int() with base 10: 'not-a-number-42kf'\n"
+    )
+
+    assert failure is not None
+    assert "'<str>'" in failure.signature
+    assert "not-a-number" not in failure.signature
 
 
 def test_strips_ci_timestamps_and_ansi_codes():
